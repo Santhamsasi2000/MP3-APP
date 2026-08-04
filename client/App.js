@@ -1,17 +1,14 @@
 import './global.css';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { Text, View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import AppNavigator from './src/navigation/AppNavigator';
 
 export default function App() {
   return (
-    <View className="flex-1 items-center justify-center bg-dark">
-      <Text className="text-primary text-3xl font-bold">
-        🎵 MP3 App
-      </Text>
-      <Text className="text-white text-lg mt-4">
-        Tailwind is Working! 🎉
-      </Text>
+    <NavigationContainer>
       <StatusBar style="light" />
-    </View>
+      <AppNavigator />
+    </NavigationContainer>
   );
 }
