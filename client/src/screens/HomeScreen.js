@@ -1,357 +1,270 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
-  Image,
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
   TextInput,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  recentlyAdded,
-  musicDirectorsSongs,
-  musicDirectorsBGM,
-  albums,
-  mostPlayed,
-} from '../data/dummyData';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
+import { getSongs, searchSongs } from '../services/api';
 
 export default function HomeScreen({ navigation }) {
   const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [totalSongs, setTotalSongs] = useState(0);
+
+  // Fetch songs count
+  const fetchData = async () => {
+    try {
+      const songs = await getSongs();
+      setTotalSongs(songs.length);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [])
+  );
+
+  // Search handler
+  const handleSearch = async (text) => {
+    setSearch(text);
+    if (text.length > 0) {
+      const results = await searchSongs(text);
+      setSearchResults(results);
+    } else {
+      setSearchResults([]);
+    }
+  };
+
+  // Main menu buttons
+  const menuButtons = [
+    {
+      id: 1,
+      title: 'Recently Added',
+      subtitle: 'Latest uploads',
+      icon: 'time',
+      colors: ['#e94560', '#c81d5e'],
+      screen: 'RecentlyAdded',
+    },
+    {
+      id: 2,
+      title: 'Music Directors',
+      subtitle: 'By folder',
+      icon: 'musical-notes',
+      colors: ['#533483', '#3a1f5f'],
+      screen: 'MusicDirectors',
+    },
+    {
+      id: 3,
+      title: 'Movies / Albums',
+      subtitle: 'Browse albums',
+      icon: 'disc',
+      colors: ['#0f3460', '#082144'],
+      screen: 'MoviesAlbums',
+    },
+    {
+      id: 4,
+      title: 'All Songs',
+      subtitle: `${totalSongs} songs`,
+      icon: 'list',
+      colors: ['#f47b3e', '#c95f2c'],
+      screen: 'AllSongs',
+    },
+  ];
+
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-dark justify-center items-center">
+        <ActivityIndicator size="large" color="#e94560" />
+        <Text className="text-white mt-4">Loading...</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-dark">
       <StatusBar barStyle="light-content" />
-      
-      <ScrollView showsVerticalScrollIndicator={false}>
-        
-        {/* Header */}
-        <View className="flex-row justify-between items-center px-5 pt-5 pb-3">
-          <View>
-            <Text className="text-gray-400 text-sm">Welcome</Text>
-            <Text className="text-white text-2xl font-bold mt-1">
-              🎵 My Music
-            </Text>
-          </View>
+
+      {/* Header */}
+      <View className="flex-row justify-between items-center px-5 pt-5 pb-3">
+        <View>
+          <Text className="text-gray-400 text-sm">Welcome</Text>
+          <Text className="text-white text-2xl font-bold mt-1">
+            🎵 My Music
+          </Text>
+        </View>
+        <View className="flex-row items-center" style={{ gap: 15 }}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Upload')}
+            className="bg-primary/20 p-2 rounded-full"
+          >
+            <Ionicons name="cloud-upload" size={24} color="#e94560" />
+          </TouchableOpacity>
           <TouchableOpacity>
             <Ionicons name="person-circle" size={40} color="#e94560" />
           </TouchableOpacity>
         </View>
+      </View>
 
-        {/* Search Bar */}
-        <View className="flex-row items-center bg-card mx-5 mt-3 px-4 rounded-xl h-12">
-          <Ionicons name="search" size={20} color="#888" />
-          <TextInput
-            className="flex-1 text-white ml-3 text-base"
-            placeholder="Search songs, artists, albums..."
-            placeholderTextColor="#888"
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={20} color="#888" />
-            </TouchableOpacity>
-          )}
-        </View>
+      {/* Search Bar */}
+      <View className="flex-row items-center bg-card mx-5 mt-3 px-4 rounded-xl h-12">
+        <Ionicons name="search" size={20} color="#888" />
+        <TextInput
+          className="flex-1 text-white ml-3 text-base"
+          placeholder="Search songs, artists..."
+          placeholderTextColor="#888"
+          value={search}
+          onChangeText={handleSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => handleSearch('')}>
+            <Ionicons name="close-circle" size={20} color="#888" />
+          </TouchableOpacity>
+        )}
+      </View>
 
-        {/* ===== SECTION 1: Recently Added ===== */}
-        <View className="mt-8">
-          <View className="flex-row justify-between items-center px-5 mb-4">
-            <View className="flex-row items-center">
-              <Ionicons name="time" size={22} color="#e94560" />
-              <Text className="text-white text-xl font-bold ml-2">
-                Recently Added
-              </Text>
-            </View>
-            <TouchableOpacity>
-              <Text className="text-primary text-sm">See All</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20 }}
-          >
-            {recentlyAdded.map((song) => (
-              <TouchableOpacity
-                key={song.id}
-                onPress={() => navigation.navigate('Player', { song })}
-                className="mr-4 w-40"
-              >
-                <View className="relative">
-                  <Image
-                    source={{ uri: song.cover }}
-                    className="w-40 h-40 rounded-2xl"
-                  />
-                  <View className="absolute bottom-2 right-2 bg-primary/90 rounded-full p-2">
-                    <Ionicons name="play" size={16} color="#fff" />
-                  </View>
-                </View>
-                <Text
-                  className="text-white text-sm font-semibold mt-2"
-                  numberOfLines={1}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+      >
+        {/* Search Results */}
+        {search.length > 0 ? (
+          <View className="mt-6 px-5">
+            <Text className="text-white text-lg font-bold mb-3">
+              Search Results ({searchResults.length})
+            </Text>
+            {searchResults.length === 0 ? (
+              <View className="items-center py-10">
+                <Ionicons name="search" size={50} color="#666" />
+                <Text className="text-gray-400 mt-3">
+                  No songs found
+                </Text>
+              </View>
+            ) : (
+              searchResults.map((song) => (
+                <TouchableOpacity
+                  key={song._id}
+                  onPress={() => navigation.navigate('Player', { song })}
+                  className="flex-row items-center py-3"
                 >
-                  {song.title}
-                </Text>
-                <Text className="text-gray-400 text-xs mt-1" numberOfLines={1}>
-                  {song.artist}
-                </Text>
-                <Text className="text-primary text-xs mt-1">
-                  {song.addedDate}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* ===== SECTION 2: Music Directors - Songs ===== */}
-        <View className="mt-8">
-          <View className="flex-row justify-between items-center px-5 mb-4">
-            <View className="flex-row items-center">
-              <Ionicons name="musical-notes" size={22} color="#e94560" />
-              <Text className="text-white text-xl font-bold ml-2">
-                Songs by Directors
-              </Text>
-            </View>
-            <TouchableOpacity>
-              <Text className="text-primary text-sm">See All</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20 }}
-          >
-            {musicDirectorsSongs.map((director) => (
-              <TouchableOpacity
-                key={director.id}
-                onPress={() =>
-                  navigation.navigate('Playlist', {
-                    playlist: {
-                      name: director.name,
-                      songCount: director.songCount,
-                      cover: director.cover,
-                    },
-                  })
-                }
-                className="mr-4 items-center"
-              >
-                <View className="relative">
-                  <Image
-                    source={{ uri: director.cover }}
-                    className="w-32 h-32 rounded-full"
-                    style={{ borderWidth: 3, borderColor: director.color }}
-                  />
-                  <View
-                    style={{ backgroundColor: director.color }}
-                    className="absolute bottom-0 right-0 rounded-full px-2 py-1"
-                  >
-                    <Text className="text-white text-xs font-bold">
-                      {director.songCount}
-                    </Text>
+                  <View className="w-14 h-14 rounded-xl bg-primary/20 justify-center items-center">
+                    <Ionicons name="musical-note" size={24} color="#e94560" />
                   </View>
-                </View>
-                <Text
-                  className="text-white text-sm font-semibold mt-3 text-center"
-                  style={{ maxWidth: 128 }}
-                  numberOfLines={2}
-                >
-                  {director.name}
-                </Text>
-                <Text className="text-gray-400 text-xs mt-1">
-                  {director.songCount} songs
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* ===== SECTION 3: Music Directors - BGM ===== */}
-        <View className="mt-8">
-          <View className="flex-row justify-between items-center px-5 mb-4">
-            <View className="flex-row items-center">
-              <Ionicons name="headset" size={22} color="#e94560" />
-              <Text className="text-white text-xl font-bold ml-2">
-                BGM by Directors
-              </Text>
-            </View>
-            <TouchableOpacity>
-              <Text className="text-primary text-sm">See All</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20 }}
-          >
-            {musicDirectorsBGM.map((director) => (
-              <TouchableOpacity
-                key={director.id}
-                onPress={() =>
-                  navigation.navigate('Playlist', {
-                    playlist: {
-                      name: `${director.name} - BGM`,
-                      songCount: director.bgmCount,
-                      cover: director.cover,
-                    },
-                  })
-                }
-                className="mr-4"
-              >
-                <View
-                  style={{ backgroundColor: director.color }}
-                  className="w-40 h-24 rounded-2xl p-3 justify-between overflow-hidden"
-                >
-                  <View className="flex-row justify-between items-start">
-                    <Ionicons name="musical-note" size={24} color="#fff" />
-                    <View className="bg-white/20 rounded-full px-2 py-1">
-                      <Text className="text-white text-xs font-bold">
-                        {director.bgmCount}
-                      </Text>
-                    </View>
-                  </View>
-                  <View>
+                  <View className="flex-1 ml-4">
                     <Text
-                      className="text-white text-base font-bold"
+                      className="text-white font-semibold"
                       numberOfLines={1}
                     >
-                      {director.name}
+                      {song.title}
                     </Text>
-                    <Text className="text-white/80 text-xs mt-1">
-                      BGM Collection
+                    <Text className="text-gray-400 text-xs mt-1">
+                      {song.artist}
                     </Text>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* ===== SECTION 4: Albums (Movies) ===== */}
-        <View className="mt-8">
-          <View className="flex-row justify-between items-center px-5 mb-4">
-            <View className="flex-row items-center">
-              <Ionicons name="disc" size={22} color="#e94560" />
-              <Text className="text-white text-xl font-bold ml-2">
-                Movie Albums
-              </Text>
-            </View>
-            <TouchableOpacity>
-              <Text className="text-primary text-sm">See All</Text>
-            </TouchableOpacity>
+                  <Ionicons name="play-circle" size={30} color="#e94560" />
+                </TouchableOpacity>
+              ))
+            )}
           </View>
-          
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20 }}
-          >
-            {albums.map((album) => (
-              <TouchableOpacity
-                key={album.id}
-                onPress={() =>
-                  navigation.navigate('Playlist', {
-                    playlist: {
-                      name: album.name,
-                      songCount: album.songCount,
-                      cover: album.cover,
-                    },
-                  })
-                }
-                className="mr-4 w-40"
-              >
-                <View className="relative">
-                  <Image
-                    source={{ uri: album.cover }}
-                    className="w-40 h-40 rounded-2xl"
-                  />
-                  <View className="absolute top-2 left-2 bg-black/60 rounded-full px-2 py-1">
-                    <Text className="text-white text-xs">{album.year}</Text>
-                  </View>
-                </View>
-                <Text
-                  className="text-white text-base font-bold mt-2"
-                  numberOfLines={1}
-                >
-                  {album.name}
-                </Text>
-                <Text
-                  className="text-gray-400 text-xs mt-1"
-                  numberOfLines={1}
-                >
-                  🎼 {album.director}
-                </Text>
-                <Text className="text-primary text-xs mt-1">
-                  {album.songCount} songs
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* ===== SECTION 5: Most Played ===== */}
-        <View className="mt-8">
-          <View className="flex-row justify-between items-center px-5 mb-4">
-            <View className="flex-row items-center">
-              <Ionicons name="flame" size={22} color="#e94560" />
-              <Text className="text-white text-xl font-bold ml-2">
-                Most Played
-              </Text>
-            </View>
-            <TouchableOpacity>
-              <Text className="text-primary text-sm">See All</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View className="px-5">
-            {mostPlayed.map((song, index) => (
-              <TouchableOpacity
-                key={song.id}
-                onPress={() => navigation.navigate('Player', { song })}
-                className="flex-row items-center py-3 bg-card/50 rounded-xl px-3 mb-2"
-              >
-                <View className="w-8 h-8 rounded-full bg-primary/20 justify-center items-center">
-                  <Text className="text-primary text-sm font-bold">
-                    {index + 1}
-                  </Text>
-                </View>
-                <Image
-                  source={{ uri: song.cover }}
-                  className="w-12 h-12 rounded-lg ml-3"
-                />
-                <View className="flex-1 ml-3">
-                  <Text
-                    className="text-white text-sm font-semibold"
-                    numberOfLines={1}
+        ) : (
+          <>
+            {/* 4 Main Menu Buttons - 2x2 Grid */}
+            <View className="px-5 mt-6">
+              <View className="flex-row flex-wrap justify-between">
+                {menuButtons.map((button) => (
+                  <TouchableOpacity
+                    key={button.id}
+                    onPress={() => navigation.navigate(button.screen)}
+                    style={{ width: '48%' }}
+                    className="mb-4"
                   >
-                    {song.title}
-                  </Text>
-                  <Text
-                    className="text-gray-400 text-xs mt-1"
-                    numberOfLines={1}
-                  >
-                    {song.artist} • {song.playCount} plays
+                    <LinearGradient
+                      colors={button.colors}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{
+                        borderRadius: 20,
+                        padding: 20,
+                        minHeight: 140,
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <View className="bg-white/20 w-14 h-14 rounded-full justify-center items-center">
+                        <Ionicons
+                          name={button.icon}
+                          size={28}
+                          color="#fff"
+                        />
+                      </View>
+                      <View>
+                        <Text className="text-white text-lg font-bold">
+                          {button.title}
+                        </Text>
+                        <Text className="text-white opacity-80 text-xs mt-1">
+                          {button.subtitle}
+                        </Text>
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Quick Stats (Optional - smaller) */}
+            <View className="px-5 mt-4">
+              <View className="bg-card p-4 rounded-2xl">
+                <View className="flex-row items-center">
+                  <Ionicons name="stats-chart" size={20} color="#e94560" />
+                  <Text className="text-white font-semibold ml-2">
+                    Your Library
                   </Text>
                 </View>
-                <View className="items-end">
-                  <Text className="text-gray-400 text-xs">
-                    {song.duration}
-                  </Text>
-                  <View className="flex-row items-center mt-1">
-                    <Ionicons name="flame" size={12} color="#e94560" />
-                    <Text className="text-primary text-xs ml-1">Hot</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+                <Text className="text-gray-400 text-sm mt-2">
+                  🎵 {totalSongs} songs uploaded
+                </Text>
+                <Text className="text-gray-400 text-sm">
+                  ☁️ Stored on cloud
+                </Text>
+              </View>
+            </View>
+
+            {/* Upload More Button */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Upload')}
+              className="mx-5 mt-4 mb-8"
+            >
+              <LinearGradient
+                colors={['#e94560', '#533483']}
+                style={{
+                  padding: 16,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons name="cloud-upload" size={22} color="#fff" />
+                <Text className="text-white font-bold ml-2">
+                  Upload More Songs
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </>
+        )}
 
         <View className="h-24" />
       </ScrollView>
