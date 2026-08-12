@@ -1,29 +1,29 @@
 {
   "expo": {
-    "name": "client",
+    "name": "My Music",
     "slug": "client",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+    "runtimeVersion": {
+      "policy": "appVersion"
     },
-    "ios": {
-      "supportsTablet": true
+    "updates": {
+      "url": "https://u.expo.dev/21b23f94-c5ba-4a67-9eff-90d01a093903"
     },
     "android": {
+      "package": "com.sasikumar.mymusic",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
+        "backgroundColor": "#0f0f1e"
+      }
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "web": {},
+    "extra": {
+      "eas": {
+        "projectId": "21b23f94-c5ba-4a67-9eff-90d01a093903"
+      }
+    },
+    "ios": {}
   }
 }

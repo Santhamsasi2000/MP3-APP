@@ -9,9 +9,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { usePlayer } from '../context/PlayerContext';
+import { useTheme } from '../context/ThemeContext';
 
 export default function MiniPlayer() {
   const navigation = useNavigation();
+  const { isDark } = useTheme();
   const {
     currentSong,
     isPlaying,
@@ -22,16 +24,14 @@ export default function MiniPlayer() {
     stopSong,
   } = usePlayer();
 
-  // Don't show if no song
   if (!currentSong) return null;
 
-  // Calculate progress
   const progress = duration > 0 ? (position / duration) * 100 : 0;
 
   return (
-    <View className="absolute bottom-10 left-0 right-0">
+    <View className="absolute bottom-0 left-0 right-0">
       {/* Progress Bar */}
-      <View className="h-0.5 bg-white/10">
+      <View className="h-0.5 bg-gray-200 dark:bg-white/10">
         <View
           className="h-full bg-primary"
           style={{ width: `${progress}%` }}
@@ -44,7 +44,7 @@ export default function MiniPlayer() {
         onPress={() => navigation.navigate('Player', { song: currentSong })}
       >
         <LinearGradient
-          colors={['#1a1a2e', '#0f0f1e']}
+          colors={isDark ? ['#1a1a2e', '#0f0f1e'] : ['#ffffff', '#f5f5f7']}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -56,11 +56,7 @@ export default function MiniPlayer() {
           {/* Song Icon */}
           <View className="w-12 h-12 rounded-lg bg-primary/20 justify-center items-center">
             <Ionicons
-              name={
-                currentSong.category === 'bgm'
-                  ? 'musical-note'
-                  : 'musical-notes'
-              }
+              name={currentSong.category === 'bgm' ? 'musical-note' : 'musical-notes'}
               size={22}
               color="#e94560"
             />
@@ -69,13 +65,13 @@ export default function MiniPlayer() {
           {/* Song Info */}
           <View className="flex-1 ml-3">
             <Text
-              className="text-white font-semibold text-sm"
+              className="text-gray-900 dark:text-white font-semibold text-sm"
               numberOfLines={1}
             >
               {currentSong.title}
             </Text>
             <Text
-              className="text-gray-400 text-xs mt-1"
+              className="text-gray-500 dark:text-gray-400 text-xs mt-1"
               numberOfLines={1}
             >
               {currentSong.artist}
@@ -87,7 +83,6 @@ export default function MiniPlayer() {
 
           {/* Controls */}
           <View className="flex-row items-center" style={{ gap: 15 }}>
-            {/* Play/Pause */}
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation();
@@ -108,7 +103,6 @@ export default function MiniPlayer() {
               )}
             </TouchableOpacity>
 
-            {/* Close */}
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation();
@@ -116,7 +110,7 @@ export default function MiniPlayer() {
               }}
               className="w-8 h-8 justify-center items-center"
             >
-              <Ionicons name="close" size={20} color="#888" />
+              <Ionicons name="close" size={20} color={isDark ? '#888' : '#666'} />
             </TouchableOpacity>
           </View>
         </LinearGradient>

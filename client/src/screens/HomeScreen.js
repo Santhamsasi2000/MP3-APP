@@ -8,20 +8,20 @@ import {
   StatusBar,
   TextInput,
   ActivityIndicator,
-  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { getSongs, searchSongs } from '../services/api';
+import { useTheme } from '../context/ThemeContext';
 
 export default function HomeScreen({ navigation }) {
+  const { isDark, toggleTheme } = useTheme();
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalSongs, setTotalSongs] = useState(0);
 
-  // Fetch songs count
   const fetchData = async () => {
     try {
       const songs = await getSongs();
@@ -39,7 +39,6 @@ export default function HomeScreen({ navigation }) {
     }, [])
   );
 
-  // Search handler
   const handleSearch = async (text) => {
     setSearch(text);
     if (text.length > 0) {
@@ -50,7 +49,6 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  // Main menu buttons
   const menuButtons = [
     {
       id: 1,
@@ -88,32 +86,50 @@ export default function HomeScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-dark justify-center items-center">
+      <SafeAreaView className="flex-1 bg-white dark:bg-dark justify-center items-center">
         <ActivityIndicator size="large" color="#e94560" />
-        <Text className="text-white mt-4">Loading...</Text>
+        <Text className="text-gray-800 dark:text-white mt-4">Loading...</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-dark">
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView className="flex-1 bg-white dark:bg-dark">
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
       <View className="flex-row justify-between items-center px-5 pt-5 pb-3">
         <View>
-          <Text className="text-gray-400 text-sm">Welcome</Text>
-          <Text className="text-white text-2xl font-bold mt-1">
+          <Text className="text-gray-600 dark:text-gray-400 text-sm">
+            Welcome
+          </Text>
+          <Text className="text-gray-900 dark:text-white text-2xl font-bold mt-1">
             🎵 My Music
           </Text>
         </View>
+
         <View className="flex-row items-center" style={{ gap: 15 }}>
+          {/* Theme Toggle Button */}
+          <TouchableOpacity
+            onPress={toggleTheme}
+            className="bg-primary/20 p-2 rounded-full"
+          >
+            <Ionicons
+              name={isDark ? 'sunny' : 'moon'}
+              size={22}
+              color="#e94560"
+            />
+          </TouchableOpacity>
+
+          {/* Upload Button */}
           <TouchableOpacity
             onPress={() => navigation.navigate('Upload')}
             className="bg-primary/20 p-2 rounded-full"
           >
-            <Ionicons name="cloud-upload" size={24} color="#e94560" />
+            <Ionicons name="cloud-upload" size={22} color="#e94560" />
           </TouchableOpacity>
+
+          {/* Profile */}
           <TouchableOpacity>
             <Ionicons name="person-circle" size={40} color="#e94560" />
           </TouchableOpacity>
@@ -121,36 +137,33 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* Search Bar */}
-      <View className="flex-row items-center bg-card mx-5 mt-3 px-4 rounded-xl h-12">
-        <Ionicons name="search" size={20} color="#888" />
+      <View className="flex-row items-center bg-gray-100 dark:bg-card mx-5 mt-3 px-4 rounded-xl h-12">
+        <Ionicons name="search" size={20} color={isDark ? '#888' : '#666'} />
         <TextInput
-          className="flex-1 text-white ml-3 text-base"
+          className="flex-1 text-gray-900 dark:text-white ml-3 text-base"
           placeholder="Search songs, artists..."
-          placeholderTextColor="#888"
+          placeholderTextColor={isDark ? '#888' : '#999'}
           value={search}
           onChangeText={handleSearch}
         />
         {search.length > 0 && (
           <TouchableOpacity onPress={() => handleSearch('')}>
-            <Ionicons name="close-circle" size={20} color="#888" />
+            <Ionicons name="close-circle" size={20} color={isDark ? '#888' : '#666'} />
           </TouchableOpacity>
         )}
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        className="flex-1"
-      >
+      <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
         {/* Search Results */}
         {search.length > 0 ? (
           <View className="mt-6 px-5">
-            <Text className="text-white text-lg font-bold mb-3">
+            <Text className="text-gray-900 dark:text-white text-lg font-bold mb-3">
               Search Results ({searchResults.length})
             </Text>
             {searchResults.length === 0 ? (
               <View className="items-center py-10">
-                <Ionicons name="search" size={50} color="#666" />
-                <Text className="text-gray-400 mt-3">
+                <Ionicons name="search" size={50} color={isDark ? '#666' : '#999'} />
+                <Text className="text-gray-500 dark:text-gray-400 mt-3">
                   No songs found
                 </Text>
               </View>
@@ -166,12 +179,12 @@ export default function HomeScreen({ navigation }) {
                   </View>
                   <View className="flex-1 ml-4">
                     <Text
-                      className="text-white font-semibold"
+                      className="text-gray-900 dark:text-white font-semibold"
                       numberOfLines={1}
                     >
                       {song.title}
                     </Text>
-                    <Text className="text-gray-400 text-xs mt-1">
+                    <Text className="text-gray-500 dark:text-gray-400 text-xs mt-1">
                       {song.artist}
                     </Text>
                   </View>
@@ -182,7 +195,7 @@ export default function HomeScreen({ navigation }) {
           </View>
         ) : (
           <>
-            {/* 4 Main Menu Buttons - 2x2 Grid */}
+            {/* 4 Menu Buttons */}
             <View className="px-5 mt-6">
               <View className="flex-row flex-wrap justify-between">
                 {menuButtons.map((button) => (
@@ -204,11 +217,7 @@ export default function HomeScreen({ navigation }) {
                       }}
                     >
                       <View className="bg-white/20 w-14 h-14 rounded-full justify-center items-center">
-                        <Ionicons
-                          name={button.icon}
-                          size={28}
-                          color="#fff"
-                        />
+                        <Ionicons name={button.icon} size={28} color="#fff" />
                       </View>
                       <View>
                         <Text className="text-white text-lg font-bold">
@@ -224,19 +233,19 @@ export default function HomeScreen({ navigation }) {
               </View>
             </View>
 
-            {/* Quick Stats (Optional - smaller) */}
+            {/* Stats Card */}
             <View className="px-5 mt-4">
-              <View className="bg-card p-4 rounded-2xl">
+              <View className="bg-gray-100 dark:bg-card p-4 rounded-2xl">
                 <View className="flex-row items-center">
                   <Ionicons name="stats-chart" size={20} color="#e94560" />
-                  <Text className="text-white font-semibold ml-2">
+                  <Text className="text-gray-900 dark:text-white font-semibold ml-2">
                     Your Library
                   </Text>
                 </View>
-                <Text className="text-gray-400 text-sm mt-2">
+                <Text className="text-gray-600 dark:text-gray-400 text-sm mt-2">
                   🎵 {totalSongs} songs uploaded
                 </Text>
-                <Text className="text-gray-400 text-sm">
+                <Text className="text-gray-600 dark:text-gray-400 text-sm">
                   ☁️ Stored on cloud
                 </Text>
               </View>
