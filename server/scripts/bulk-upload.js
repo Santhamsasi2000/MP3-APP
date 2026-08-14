@@ -81,43 +81,26 @@ async function getMetadata(filePath) {
 function extractPathInfo(filePath) {
   const parts = filePath.split(path.sep);
   
-  // Get the folder name (e.g., "Anirudh BGMs")
+  // Get the folder name (last folder containing the file)
   const folderName = parts[parts.length - 2] || 'Unknown';
   
-  // Determine category based on folder name
-  let category = 'song'; // default
-  let musicDirector = folderName;
-  let genre = '';
+  // Use folder name directly as music director
+  const musicDirector = folderName;
   
+  // Detect category from folder name
+  let category = 'song';
   const lowerFolder = folderName.toLowerCase();
   
-  // Check for BGM
   if (lowerFolder.includes('bgm')) {
     category = 'bgm';
-    musicDirector = folderName.replace(/\s*bgms?\s*/gi, '').trim();
-    genre = 'BGM';
-  }
-  // Check for Melody
-  else if (lowerFolder.includes('melody')) {
-    category = 'song';
-    musicDirector = folderName.replace(/\s*melody\s*/gi, '').trim();
-    genre = 'Melody';
-  }
-  // Check for other categories
-  else if (lowerFolder.includes('hits')) {
-    musicDirector = folderName.replace(/\s*hits\s*/gi, '').trim();
-    genre = 'Hits';
-  }
-  else if (lowerFolder.includes('mass')) {
-    musicDirector = folderName.replace(/\s*mass\s*/gi, '').trim();
-    genre = 'Mass';
+  } else if (lowerFolder.includes('melody')) {
+    category = 'song'; // Still song, but melody type
   }
   
   return {
-    musicDirector: musicDirector,
-    movieName: '', // Will be filled from metadata
+    musicDirector: musicDirector,  // Use exact folder name
+    movieName: '',                  // Will get from metadata
     category: category,
-    genre: genre,
     folderName: folderName,
   };
 }

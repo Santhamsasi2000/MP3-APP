@@ -5,14 +5,17 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { songs } from '../data/dummyData';
+import { useMiniPlayerPadding } from '../hooks/useMiniPlayerPadding';
+
 
 export default function PlaylistScreen({ route, navigation }) {
   const { playlist } = route.params;
+  const bottomPadding = useMiniPlayerPadding();
+  
 
   return (
     <View className="flex-1 bg-dark">
@@ -21,7 +24,7 @@ export default function PlaylistScreen({ route, navigation }) {
         colors={['#e94560', '#0f0f1e']}
         style={{ paddingBottom: 20 }}
       >
-        <SafeAreaView>
+        <SafeAreaView edges={['top']} className="flex-1 bg-white dark:bg-dark">
           {/* Top Bar */}
           <View className="flex-row justify-between px-5 py-3">
             <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -61,7 +64,7 @@ export default function PlaylistScreen({ route, navigation }) {
       </LinearGradient>
 
       {/* Song List */}
-      <ScrollView className="flex-1 px-5 pt-5">
+      <ScrollView contentContainerStyle={{ paddingBottom: bottomPadding }} className="flex-1 px-5 pt-5">
         {songs.map((song, index) => (
           <TouchableOpacity
             key={song.id}

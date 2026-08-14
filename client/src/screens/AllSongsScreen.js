@@ -4,26 +4,28 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   TextInput,
   Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getSongs } from '../services/api';
+import { useTheme } from '../context/ThemeContext';
+import { useMiniPlayerPadding } from '../hooks/useMiniPlayerPadding';
 
 export default function AllSongsScreen({ navigation }) {
+  const { isDark } = useTheme();
   const [songs, setSongs] = useState([]);
   const [filteredSongs, setFilteredSongs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [showFilter, setShowFilter] = useState(false);
-  
-  // Sort & Filter states
-  const [sortBy, setSortBy] = useState('newest'); // newest, oldest, name, mostPlayed
-  const [filterCategory, setFilterCategory] = useState('all'); // all, song, bgm
+  const [sortBy, setSortBy] = useState('newest');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const bottomPadding = useMiniPlayerPadding(); 
 
   useEffect(() => {
     fetchSongs();
@@ -48,12 +50,10 @@ export default function AllSongsScreen({ navigation }) {
   const applyFiltersAndSort = () => {
     let result = [...songs];
 
-    // Filter by category
     if (filterCategory !== 'all') {
       result = result.filter((s) => s.category === filterCategory);
     }
 
-    // Filter by search
     if (search) {
       result = result.filter(
         (s) =>
@@ -62,7 +62,6 @@ export default function AllSongsScreen({ navigation }) {
       );
     }
 
-    // Sort
     switch (sortBy) {
       case 'newest':
         result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -107,24 +106,29 @@ export default function AllSongsScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-dark justify-center items-center">
+      <SafeAreaView
+        edges={['top']}
+        className="flex-1 bg-white dark:bg-dark justify-center items-center"
+      >
         <ActivityIndicator size="large" color="#e94560" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-dark">
-      {/* Header */}
-      <View className="flex-row items-center px-5 pt-5 pb-3">
+    <SafeAreaView
+      edges={['top']}
+      className="flex-1 bg-white dark:bg-dark"
+    >
+      <View className="flex-row items-center px-5 pt-3 pb-3">
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={26} color="#fff" />
+          <Ionicons name="arrow-back" size={26} color="#e94560" />
         </TouchableOpacity>
         <View className="ml-4 flex-1">
-          <Text className="text-white text-2xl font-bold">
+          <Text className="text-gray-900 dark:text-white text-2xl font-bold">
             All Songs
           </Text>
-          <Text className="text-gray-400 text-sm">
+          <Text className="text-gray-500 dark:text-gray-400 text-sm">
             {filteredSongs.length} of {songs.length} songs
           </Text>
         </View>
@@ -136,24 +140,23 @@ export default function AllSongsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Search */}
-      <View className="flex-row items-center bg-card mx-5 mt-3 px-4 rounded-xl h-12">
-        <Ionicons name="search" size={20} color="#888" />
+      <View className="flex-row items-center bg-gray-100 dark:bg-card mx-5 mt-2 px-4 rounded-xl h-12">
+        <Ionicons name="search" size={20} color={isDark ? '#888' : '#666'} />
         <TextInput
-          className="flex-1 text-white ml-3 text-base"
+          className="flex-1 text-gray-900 dark:text-white ml-3 text-base"
           placeholder="Search songs..."
-          placeholderTextColor="#888"
+          placeholderTextColor={isDark ? '#888' : '#999'}
           value={search}
           onChangeText={setSearch}
         />
         {search.length > 0 && (
           <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={20} color="#888" />
+            <Ionicons name="close-circle" size={20} color={isDark ? '#888' : '#666'} />
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Active Filters */}
+      {/* Filter Tags */}
       <View className="flex-row px-5 mt-3" style={{ gap: 8 }}>
         <View className="bg-primary/20 px-3 py-1 rounded-full">
           <Text className="text-primary text-xs">{getSortLabel()}</Text>
@@ -163,9 +166,9 @@ export default function AllSongsScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Songs List */}
       <ScrollView
         className="flex-1 mt-3"
+        contentContainerStyle={{ paddingBottom: bottomPadding }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -176,32 +179,43 @@ export default function AllSongsScreen({ navigation }) {
       >
         {filteredSongs.length === 0 ? (
           <View className="items-center py-20">
-            <Ionicons name="musical-notes" size={80} color="#666" />
-            <Text className="text-gray-400 mt-4">No songs found</Text>
+            <Ionicons name="musical-notes" size={80} color={isDark ? '#666' : '#ccc'} />
+            <Text className="text-gray-500 dark:text-gray-400 mt-4">
+              No songs found
+            </Text>
           </View>
         ) : (
           <View className="px-5">
             {filteredSongs.map((song, index) => (
               <TouchableOpacity
                 key={song._id}
-                onPress={() => navigation.navigate('Player', { song })}
+                onPress={() => navigation.navigate('Player', {
+                   song,
+                   songList: filteredSongs
+                  })}
                 className="flex-row items-center py-3"
               >
-                <Text className="text-gray-400 w-8">{index + 1}</Text>
+                <Text className="text-gray-500 dark:text-gray-400 w-8">
+                  {index + 1}
+                </Text>
                 <View className="w-12 h-12 rounded-lg bg-primary/20 justify-center items-center">
                   <Ionicons
-                    name={
-                      song.category === 'bgm' ? 'musical-note' : 'musical-notes'
-                    }
+                    name={song.category === 'bgm' ? 'musical-note' : 'musical-notes'}
                     size={20}
                     color="#e94560"
                   />
                 </View>
                 <View className="flex-1 ml-3">
-                  <Text className="text-white font-semibold" numberOfLines={1}>
+                  <Text
+                    className="text-gray-900 dark:text-white font-semibold"
+                    numberOfLines={1}
+                  >
                     {song.title}
                   </Text>
-                  <Text className="text-gray-400 text-xs mt-1" numberOfLines={1}>
+                  <Text
+                    className="text-gray-500 dark:text-gray-400 text-xs mt-1"
+                    numberOfLines={1}
+                  >
                     {song.artist} • {song.movieName || 'Unknown'}
                   </Text>
                 </View>
@@ -212,7 +226,7 @@ export default function AllSongsScreen({ navigation }) {
                     </View>
                   )}
                   {song.playCount > 0 && (
-                    <Text className="text-gray-500 text-xs mt-1">
+                    <Text className="text-gray-500 dark:text-gray-400 text-xs mt-1">
                       🔥 {song.playCount}
                     </Text>
                   )}
@@ -221,7 +235,6 @@ export default function AllSongsScreen({ navigation }) {
             ))}
           </View>
         )}
-        <View className="h-8" />
       </ScrollView>
 
       {/* Filter Modal */}
@@ -234,18 +247,20 @@ export default function AllSongsScreen({ navigation }) {
         <TouchableOpacity
           className="flex-1 bg-black/60 justify-end"
           onPress={() => setShowFilter(false)}
+          activeOpacity={1}
         >
-          <View className="bg-dark rounded-t-3xl p-6">
+          <View className="bg-white dark:bg-dark rounded-t-3xl p-6">
             <View className="items-center mb-4">
-              <View className="w-12 h-1 bg-gray-600 rounded-full" />
+              <View className="w-12 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
             </View>
 
-            <Text className="text-white text-xl font-bold mb-4">
+            <Text className="text-gray-900 dark:text-white text-xl font-bold mb-4">
               Sort & Filter
             </Text>
 
-            {/* Sort Options */}
-            <Text className="text-gray-400 mb-2 mt-4">Sort By</Text>
+            <Text className="text-gray-500 dark:text-gray-400 mb-2 mt-4">
+              Sort By
+            </Text>
             {[
               { key: 'newest', label: '🆕 Newest First' },
               { key: 'oldest', label: '📅 Oldest First' },
@@ -256,15 +271,26 @@ export default function AllSongsScreen({ navigation }) {
                 key={option.key}
                 onPress={() => setSortBy(option.key)}
                 className={`p-3 rounded-xl mb-2 ${
-                  sortBy === option.key ? 'bg-primary' : 'bg-card'
+                  sortBy === option.key 
+                    ? 'bg-primary' 
+                    : 'bg-gray-100 dark:bg-card'
                 }`}
               >
-                <Text className="text-white">{option.label}</Text>
+                <Text 
+                  className={
+                    sortBy === option.key 
+                      ? 'text-white' 
+                      : 'text-gray-900 dark:text-white'
+                  }
+                >
+                  {option.label}
+                </Text>
               </TouchableOpacity>
             ))}
 
-            {/* Filter Options */}
-            <Text className="text-gray-400 mb-2 mt-4">Category</Text>
+            <Text className="text-gray-500 dark:text-gray-400 mb-2 mt-4">
+              Category
+            </Text>
             {[
               { key: 'all', label: '🎵 All Songs' },
               { key: 'song', label: '🎤 Songs Only' },
@@ -274,14 +300,23 @@ export default function AllSongsScreen({ navigation }) {
                 key={option.key}
                 onPress={() => setFilterCategory(option.key)}
                 className={`p-3 rounded-xl mb-2 ${
-                  filterCategory === option.key ? 'bg-primary' : 'bg-card'
+                  filterCategory === option.key 
+                    ? 'bg-primary' 
+                    : 'bg-gray-100 dark:bg-card'
                 }`}
               >
-                <Text className="text-white">{option.label}</Text>
+                <Text 
+                  className={
+                    filterCategory === option.key 
+                      ? 'text-white' 
+                      : 'text-gray-900 dark:text-white'
+                  }
+                >
+                  {option.label}
+                </Text>
               </TouchableOpacity>
             ))}
 
-            {/* Apply Button */}
             <TouchableOpacity
               onPress={() => setShowFilter(false)}
               className="bg-primary p-4 rounded-xl mt-4"

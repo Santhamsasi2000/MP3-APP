@@ -176,5 +176,16 @@ export const uploadSong = async (fileUri, fileName, metadata, onProgress) => {
   }
 };
 
+// Delete song
+export const deleteSong = async (songId) => {
+  try {
+    const response = await axios.delete(`${BASE_URL}/songs/${songId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Delete error:', error.message);
+    return { success: false, error: error.message };
+  }
+};
+
 // Export BASE_URL for other files that need it
 export { BASE_URL };

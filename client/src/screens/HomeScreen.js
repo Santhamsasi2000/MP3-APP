@@ -14,17 +14,22 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { getSongs, searchSongs } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
+import { usePlayer, REPEAT_MODES } from '../context/PlayerContext';
 
 export default function HomeScreen({ navigation }) {
   const { isDark, toggleTheme } = useTheme();
+  const { playSong, setRepeatMode } = usePlayer();
+  
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalSongs, setTotalSongs] = useState(0);
+  const [allSongs, setAllSongs] = useState([]);
 
   const fetchData = async () => {
     try {
       const songs = await getSongs();
+      setAllSongs(songs);  // ⭐ Store all songs
       setTotalSongs(songs.length);
     } catch (error) {
       console.error('Error:', error);
@@ -47,6 +52,27 @@ export default function HomeScreen({ navigation }) {
     } else {
       setSearchResults([]);
     }
+  };
+
+  // ⭐ SHUFFLE ALL SONGS
+  const handleShuffleAll = () => {
+    if (allSongs.length === 0) return;
+
+    // Pick random song
+    const randomIndex = Math.floor(Math.random() * allSongs.length);
+    const randomSong = allSongs[randomIndex];
+
+    // Set shuffle mode
+    setRepeatMode(REPEAT_MODES.SHUFFLE);
+
+    // Play with FULL playlist of all songs
+    playSong(randomSong, allSongs);
+
+    // Navigate to player
+    navigation.navigate('Player', {
+      song: randomSong,
+      songList: allSongs,
+    });
   };
 
   const menuButtons = [
@@ -108,11 +134,11 @@ export default function HomeScreen({ navigation }) {
           </Text>
         </View>
 
-        <View className="flex-row items-center" style={{ gap: 15 }}>
-          {/* Theme Toggle Button */}
+        <View className="flex-row items-center" style={{ gap: 12 }}>
           <TouchableOpacity
             onPress={toggleTheme}
             className="bg-primary/20 p-2 rounded-full"
+            activeOpacity={0.7}
           >
             <Ionicons
               name={isDark ? 'sunny' : 'moon'}
@@ -121,23 +147,22 @@ export default function HomeScreen({ navigation }) {
             />
           </TouchableOpacity>
 
-          {/* Upload Button */}
           <TouchableOpacity
             onPress={() => navigation.navigate('Upload')}
             className="bg-primary/20 p-2 rounded-full"
+            activeOpacity={0.7}
           >
             <Ionicons name="cloud-upload" size={22} color="#e94560" />
           </TouchableOpacity>
 
-          {/* Profile */}
-          <TouchableOpacity>
-            <Ionicons name="person-circle" size={40} color="#e94560" />
+          <TouchableOpacity activeOpacity={0.7}>
+            <Ionicons name="person-circle" size={38} color="#e94560" />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Search Bar */}
-      <View className="flex-row items-center bg-gray-100 dark:bg-card mx-5 mt-3 px-4 rounded-xl h-12">
+      <View className="flex-row items-center bg-gray-100 dark:bg-card mx-5 mt-2 px-4 rounded-xl h-12">
         <Ionicons name="search" size={20} color={isDark ? '#888' : '#666'} />
         <TextInput
           className="flex-1 text-gray-900 dark:text-white ml-3 text-base"
@@ -153,7 +178,40 @@ export default function HomeScreen({ navigation }) {
         )}
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
+      {/* ⭐ SHUFFLE ALL BUTTON */}
+      {!search && (
+        <View className="px-5 mt-3">
+          <TouchableOpacity
+            onPress={handleShuffleAll}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={['#e94560', '#533483']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              className="flex-row items-center justify-center py-3 rounded-full"
+              style={{
+                borderRadius: 50,
+                paddingVertical: 14,
+              }}
+            >
+              <Ionicons name="shuffle" size={22} color="#fff" />
+              <Text className="text-white font-bold text-base ml-2">
+                Shuffle All Songs
+              </Text>
+              <Text className="text-white opacity-70 text-sm ml-2">
+                ({totalSongs})
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
         {/* Search Results */}
         {search.length > 0 ? (
           <View className="mt-6 px-5">
@@ -171,17 +229,22 @@ export default function HomeScreen({ navigation }) {
               searchResults.map((song) => (
                 <TouchableOpacity
                   key={song._id}
-                  onPress={() => navigation.navigate('Player', { song })}
+                  onPress={() => {
+                    // ⭐ Play with ALL SONGS as playlist
+                    playSong(song, allSongs);
+                    navigation.navigate('Player', { 
+                      song, 
+                      songList: allSongs 
+                    });
+                  }}
                   className="flex-row items-center py-3"
+                  activeOpacity={0.7}
                 >
                   <View className="w-14 h-14 rounded-xl bg-primary/20 justify-center items-center">
                     <Ionicons name="musical-note" size={24} color="#e94560" />
                   </View>
                   <View className="flex-1 ml-4">
-                    <Text
-                      className="text-gray-900 dark:text-white font-semibold"
-                      numberOfLines={1}
-                    >
+                    <Text className="text-gray-900 dark:text-white font-semibold" numberOfLines={1}>
                       {song.title}
                     </Text>
                     <Text className="text-gray-500 dark:text-gray-400 text-xs mt-1">
@@ -196,7 +259,7 @@ export default function HomeScreen({ navigation }) {
         ) : (
           <>
             {/* 4 Menu Buttons */}
-            <View className="px-5 mt-6">
+            <View className="px-5 mt-4">
               <View className="flex-row flex-wrap justify-between">
                 {menuButtons.map((button) => (
                   <TouchableOpacity
@@ -204,6 +267,7 @@ export default function HomeScreen({ navigation }) {
                     onPress={() => navigation.navigate(button.screen)}
                     style={{ width: '48%' }}
                     className="mb-4"
+                    activeOpacity={0.85}
                   >
                     <LinearGradient
                       colors={button.colors}
@@ -234,7 +298,7 @@ export default function HomeScreen({ navigation }) {
             </View>
 
             {/* Stats Card */}
-            <View className="px-5 mt-4">
+            <View className="px-5 mt-2">
               <View className="bg-gray-100 dark:bg-card p-4 rounded-2xl">
                 <View className="flex-row items-center">
                   <Ionicons name="stats-chart" size={20} color="#e94560" />
@@ -251,10 +315,11 @@ export default function HomeScreen({ navigation }) {
               </View>
             </View>
 
-            {/* Upload More Button */}
+            {/* Upload Button */}
             <TouchableOpacity
               onPress={() => navigation.navigate('Upload')}
-              className="mx-5 mt-4 mb-8"
+              className="mx-5 mt-4"
+              activeOpacity={0.85}
             >
               <LinearGradient
                 colors={['#e94560', '#533483']}
@@ -274,8 +339,6 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </>
         )}
-
-        <View className="h-24" />
       </ScrollView>
     </SafeAreaView>
   );

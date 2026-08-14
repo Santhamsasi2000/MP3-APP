@@ -172,6 +172,42 @@ router.get('/meta/movies', async (req, res) => {
   }
 });
 
+// Delete song
+router.delete('/:id', async (req, res) => {
+  try {
+    const song = await Song.findById(req.params.id);
+    if (!song) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Song not found' 
+      });
+    }
+
+    // Delete from Telegram
+    try {
+      await bot.telegram.deleteMessage(
+        process.env.CHANNEL_ID, 
+        song.telegramMessageId
+      );
+    } catch (err) {
+      console.log('Could not delete from Telegram:', err.message);
+    }
+
+    // Delete from MongoDB
+    await Song.deleteOne({ _id: song._id });
+
+    res.json({ 
+      success: true, 
+      message: 'Song deleted successfully' 
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Configure multer for file upload
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {

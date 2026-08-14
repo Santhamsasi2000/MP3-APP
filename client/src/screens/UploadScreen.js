@@ -4,22 +4,25 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { uploadSong } from '../services/api';
+import { useTheme } from '../context/ThemeContext';
+import { useMiniPlayerPadding } from '../hooks/useMiniPlayerPadding';
 
 export default function UploadScreen({ navigation }) {
+  const { isDark } = useTheme();
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const bottomPadding = useMiniPlayerPadding();
 
-  // Metadata form
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [album, setAlbum] = useState('');
@@ -27,7 +30,6 @@ export default function UploadScreen({ navigation }) {
   const [movieName, setMovieName] = useState('');
   const [category, setCategory] = useState('song');
 
-  // Pick MP3 file
   const pickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -38,26 +40,23 @@ export default function UploadScreen({ navigation }) {
       if (result.canceled) return;
 
       const file = result.assets[0];
-      
-      // Check file size (50MB max)
+
       if (file.size > 50 * 1024 * 1024) {
         Alert.alert(
           'File Too Large',
-          'Maximum file size is 50 MB. Your file is ' + 
-          (file.size / 1024 / 1024).toFixed(2) + ' MB'
+          'Maximum file size is 50 MB. Your file is ' +
+            (file.size / 1024 / 1024).toFixed(2) +
+            ' MB'
         );
         return;
       }
 
-      // Check if MP3
       if (!file.name.toLowerCase().endsWith('.mp3')) {
         Alert.alert('Invalid File', 'Please select MP3 file only');
         return;
       }
 
       setSelectedFile(file);
-      
-      // Auto-fill title from filename
       const nameWithoutExt = file.name.replace('.mp3', '');
       setTitle(nameWithoutExt);
     } catch (error) {
@@ -65,7 +64,6 @@ export default function UploadScreen({ navigation }) {
     }
   };
 
-  // Upload file
   const handleUpload = async () => {
     if (!selectedFile) {
       Alert.alert('No File', 'Please select an MP3 file first');
@@ -102,14 +100,8 @@ export default function UploadScreen({ navigation }) {
           '🎉 Success!',
           `"${result.song.title}" uploaded successfully!`,
           [
-            {
-              text: 'Upload Another',
-              onPress: () => resetForm(),
-            },
-            {
-              text: 'Go Home',
-              onPress: () => navigation.goBack(),
-            },
+            { text: 'Upload Another', onPress: () => resetForm() },
+            { text: 'Go Home', onPress: () => navigation.goBack() },
           ]
         );
       } else {
@@ -135,19 +127,22 @@ export default function UploadScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-dark">
-      {/* Header */}
-      <View className="flex-row items-center px-5 pt-5 pb-3">
+    <SafeAreaView
+      edges={['top']}
+      className="flex-1 bg-white dark:bg-dark"
+    >
+      <View className="flex-row items-center px-5 pt-3 pb-3">
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={26} color="#fff" />
+          <Ionicons name="arrow-back" size={26} color="#e94560" />
         </TouchableOpacity>
-        <Text className="text-white text-xl font-bold ml-4">
+        <Text className="text-gray-900 dark:text-white text-xl font-bold ml-4">
           Upload Song
         </Text>
       </View>
 
       <ScrollView
         className="flex-1 px-5"
+        contentContainerStyle={{ paddingBottom: bottomPadding }}
         showsVerticalScrollIndicator={false}
       >
         {/* File Picker */}
@@ -185,20 +180,21 @@ export default function UploadScreen({ navigation }) {
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Metadata Form */}
         {selectedFile && (
           <View className="mt-6">
-            <Text className="text-white text-lg font-bold mb-4">
+            <Text className="text-gray-900 dark:text-white text-lg font-bold mb-4">
               Song Details
             </Text>
 
             {/* Title */}
             <View className="mb-4">
-              <Text className="text-gray-400 text-sm mb-2">Song Title *</Text>
+              <Text className="text-gray-500 dark:text-gray-400 text-sm mb-2">
+                Song Title *
+              </Text>
               <TextInput
-                className="bg-card text-white p-4 rounded-xl"
+                className="bg-gray-100 dark:bg-card text-gray-900 dark:text-white p-4 rounded-xl"
                 placeholder="Enter song title"
-                placeholderTextColor="#666"
+                placeholderTextColor={isDark ? '#666' : '#999'}
                 value={title}
                 onChangeText={setTitle}
                 editable={!uploading}
@@ -207,24 +203,28 @@ export default function UploadScreen({ navigation }) {
 
             {/* Artist */}
             <View className="mb-4">
-              <Text className="text-gray-400 text-sm mb-2">Artist / Singer</Text>
+              <Text className="text-gray-500 dark:text-gray-400 text-sm mb-2">
+                Artist / Singer
+              </Text>
               <TextInput
-                className="bg-card text-white p-4 rounded-xl"
+                className="bg-gray-100 dark:bg-card text-gray-900 dark:text-white p-4 rounded-xl"
                 placeholder="Artist name"
-                placeholderTextColor="#666"
+                placeholderTextColor={isDark ? '#666' : '#999'}
                 value={artist}
                 onChangeText={setArtist}
                 editable={!uploading}
               />
             </View>
 
-            {/* Album/Movie */}
+            {/* Movie */}
             <View className="mb-4">
-              <Text className="text-gray-400 text-sm mb-2">Album / Movie</Text>
+              <Text className="text-gray-500 dark:text-gray-400 text-sm mb-2">
+                Album / Movie
+              </Text>
               <TextInput
-                className="bg-card text-white p-4 rounded-xl"
+                className="bg-gray-100 dark:bg-card text-gray-900 dark:text-white p-4 rounded-xl"
                 placeholder="Album or movie name"
-                placeholderTextColor="#666"
+                placeholderTextColor={isDark ? '#666' : '#999'}
                 value={movieName}
                 onChangeText={(text) => {
                   setMovieName(text);
@@ -234,15 +234,15 @@ export default function UploadScreen({ navigation }) {
               />
             </View>
 
-            {/* Music Director */}
+            {/* Director */}
             <View className="mb-4">
-              <Text className="text-gray-400 text-sm mb-2">
+              <Text className="text-gray-500 dark:text-gray-400 text-sm mb-2">
                 Music Director
               </Text>
               <TextInput
-                className="bg-card text-white p-4 rounded-xl"
+                className="bg-gray-100 dark:bg-card text-gray-900 dark:text-white p-4 rounded-xl"
                 placeholder="Music director name"
-                placeholderTextColor="#666"
+                placeholderTextColor={isDark ? '#666' : '#999'}
                 value={musicDirector}
                 onChangeText={setMusicDirector}
                 editable={!uploading}
@@ -251,18 +251,26 @@ export default function UploadScreen({ navigation }) {
 
             {/* Category */}
             <View className="mb-4">
-              <Text className="text-gray-400 text-sm mb-2">Category</Text>
+              <Text className="text-gray-500 dark:text-gray-400 text-sm mb-2">
+                Category
+              </Text>
               <View className="flex-row" style={{ gap: 10 }}>
                 <TouchableOpacity
                   onPress={() => setCategory('song')}
                   className={`flex-1 p-4 rounded-xl border-2 ${
                     category === 'song'
                       ? 'bg-primary border-primary'
-                      : 'bg-card border-card'
+                      : 'bg-gray-100 dark:bg-card border-transparent'
                   }`}
                   disabled={uploading}
                 >
-                  <Text className="text-white text-center font-semibold">
+                  <Text 
+                    className={
+                      category === 'song'
+                        ? 'text-white text-center font-semibold'
+                        : 'text-gray-900 dark:text-white text-center font-semibold'
+                    }
+                  >
                     🎵 Song
                   </Text>
                 </TouchableOpacity>
@@ -272,29 +280,33 @@ export default function UploadScreen({ navigation }) {
                   className={`flex-1 p-4 rounded-xl border-2 ${
                     category === 'bgm'
                       ? 'bg-primary border-primary'
-                      : 'bg-card border-card'
+                      : 'bg-gray-100 dark:bg-card border-transparent'
                   }`}
                   disabled={uploading}
                 >
-                  <Text className="text-white text-center font-semibold">
+                  <Text 
+                    className={
+                      category === 'bgm'
+                        ? 'text-white text-center font-semibold'
+                        : 'text-gray-900 dark:text-white text-center font-semibold'
+                    }
+                  >
                     🎼 BGM
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Progress Bar */}
+            {/* Progress */}
             {uploading && (
               <View className="mb-4">
                 <View className="flex-row justify-between mb-2">
-                  <Text className="text-white text-sm">
+                  <Text className="text-gray-900 dark:text-white text-sm">
                     Uploading...
                   </Text>
-                  <Text className="text-primary font-bold">
-                    {progress}%
-                  </Text>
+                  <Text className="text-primary font-bold">{progress}%</Text>
                 </View>
-                <View className="h-3 bg-card rounded-full overflow-hidden">
+                <View className="h-3 bg-gray-200 dark:bg-card rounded-full overflow-hidden">
                   <View
                     className="h-full bg-primary rounded-full"
                     style={{ width: `${progress}%` }}
@@ -307,7 +319,7 @@ export default function UploadScreen({ navigation }) {
             <TouchableOpacity
               onPress={handleUpload}
               disabled={uploading}
-              className="mt-4 mb-8"
+              className="mt-4"
             >
               <LinearGradient
                 colors={uploading ? ['#666', '#444'] : ['#e94560', '#533483']}
