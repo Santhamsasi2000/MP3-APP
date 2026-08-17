@@ -71,7 +71,7 @@ export default function MoviesAlbumsScreen({ navigation }) {
   return (
     <SafeAreaView
       edges={['top']}
-      className="flex-1 bg-white dark:bg-dark"
+      className="flex-1 bg-white dark:bg-dark"  style={{ paddingTop: 10 }}
     >
       <View className="flex-row items-center px-5 pt-3 pb-3">
         <TouchableOpacity onPress={() => navigation.goBack()}>

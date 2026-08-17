@@ -70,7 +70,7 @@ export default function DirectorSongsScreen({ route, navigation }) {
     return (
       <SafeAreaView
         edges={['top']}
-        className="flex-1 bg-white dark:bg-dark justify-center items-center"
+        className="flex-1 bg-white dark:bg-dark justify-center items-center"  style={{ paddingTop: 10 }}
       >
         <ActivityIndicator size="large" color="#e94560" />
       </SafeAreaView>

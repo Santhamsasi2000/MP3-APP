@@ -24,7 +24,7 @@ export default function PlaylistScreen({ route, navigation }) {
         colors={['#e94560', '#0f0f1e']}
         style={{ paddingBottom: 20 }}
       >
-        <SafeAreaView edges={['top']} className="flex-1 bg-white dark:bg-dark">
+        <SafeAreaView edges={['top']} className="flex-1 bg-white dark:bg-dark"  style={{ paddingTop: 10 }}>
           {/* Top Bar */}
           <View className="flex-row justify-between px-5 py-3">
             <TouchableOpacity onPress={() => navigation.goBack()}>

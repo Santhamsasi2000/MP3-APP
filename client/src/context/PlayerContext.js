@@ -32,8 +32,8 @@ export const PlayerProvider = ({ children }) => {
   const repeatModeRef = useRef(repeatMode);
   const playlistRef = useRef(playlist);
   const currentIndexRef = useRef(currentIndex);
+  const isChangingSongRef = useRef(false); // ⭐ Prevent double play
 
-  // Keep refs updated (for use in callbacks)
   useEffect(() => {
     repeatModeRef.current = repeatMode;
   }, [repeatMode]);
@@ -67,54 +67,122 @@ export const PlayerProvider = ({ children }) => {
     };
   }, []);
 
-  // ⭐ FAST position updates (100ms)
   const onPlaybackStatusUpdate = useCallback((status) => {
     if (status.isLoaded) {
-      // Update position FAST
       setPosition(status.positionMillis || 0);
       
-      // Update duration once
       if (status.durationMillis) {
         setDuration(status.durationMillis);
       }
       
-      // Update playing state
       setIsPlaying(status.isPlaying);
 
-      // Auto-play next when finished
-      if (status.didJustFinish) {
+      if (status.didJustFinish && !isChangingSongRef.current) {
         console.log('🎵 Song finished!');
         handleSongFinishInternal();
       }
     }
   }, []);
 
-  // Internal handler using refs (accesses latest values)
   const handleSongFinishInternal = () => {
     const currentMode = repeatModeRef.current;
-    const currentPlaylist = playlistRef.current;
-    const currentIdx = currentIndexRef.current;
-
     console.log('Current mode:', currentMode);
-    console.log('Playlist length:', currentPlaylist.length);
-    console.log('Current index:', currentIdx);
 
     if (currentMode === REPEAT_MODES.REPEAT_ONE) {
-      console.log('🔂 Repeat One - Replaying same song');
+      console.log('🔂 Repeat One');
       if (soundRef.current) {
         soundRef.current.setPositionAsync(0);
         soundRef.current.playAsync();
       }
     } else if (currentMode === REPEAT_MODES.SHUFFLE) {
-      console.log('🔀 Shuffle - Playing random song');
+      console.log('🔀 Shuffle - Playing random');
       playRandomSongInternal();
     } else {
-      console.log('📋 Order - Playing next song');
+      console.log('📋 Order - Playing next');
       playNextSongInternal(true);
     }
   };
 
-  // Internal next song function
+  // ⭐ CRITICAL: Stop and unload current sound BEFORE playing new
+  const stopCurrentSound = async () => {
+    if (soundRef.current) {
+      try {
+        // Stop first
+        await soundRef.current.stopAsync();
+        // Then unload
+        await soundRef.current.unloadAsync();
+      } catch (err) {
+        console.log('Stop/unload error:', err);
+      }
+      soundRef.current = null;
+    }
+  };
+
+  // Internal play function
+  const playSongInternal = async (song) => {
+    try {
+      // ⭐ Prevent multiple simultaneous plays
+      if (isChangingSongRef.current) {
+        console.log('⚠️ Already changing song, skipping');
+        return;
+      }
+      
+      isChangingSongRef.current = true;
+      
+      setIsLoading(true);
+      setCurrentSong(song);
+      setPosition(0);
+      setDuration(0);
+      setIsPlaying(false);
+
+      // ⭐ STOP old sound completely
+      await stopCurrentSound();
+
+      // Get stream URL
+      const data = await getStreamUrl(song._id || song.id);
+
+      if (!data || !data.streamUrl) {
+        setIsLoading(false);
+        isChangingSongRef.current = false;
+        return;
+      }
+
+      // Create new sound
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: data.streamUrl },
+        { 
+          shouldPlay: true,
+          progressUpdateIntervalMillis: 100,
+        },
+        onPlaybackStatusUpdate
+      );
+
+      soundRef.current = newSound;
+      setIsLoading(false);
+      isChangingSongRef.current = false; // ⭐ Reset flag
+      
+    } catch (error) {
+      console.error('Play error:', error);
+      setIsLoading(false);
+      isChangingSongRef.current = false;
+    }
+  };
+
+  // Public play song
+  const playSong = useCallback(async (song, songList = null) => {
+    if (songList && songList.length > 0) {
+      setPlaylist(songList);
+      playlistRef.current = songList;
+      const index = songList.findIndex(s => s._id === song._id);
+      const newIndex = index >= 0 ? index : 0;
+      setCurrentIndex(newIndex);
+      currentIndexRef.current = newIndex;
+    }
+
+    await playSongInternal(song);
+  }, []);
+
+  // Next song
   const playNextSongInternal = (loop = true) => {
     const currentPlaylist = playlistRef.current;
     const currentIdx = currentIndexRef.current;
@@ -136,86 +204,10 @@ export const PlayerProvider = ({ children }) => {
     playSongInternal(currentPlaylist[nextIndex]);
   };
 
-  // Internal random song function
-  const playRandomSongInternal = () => {
-    const currentPlaylist = playlistRef.current;
-    const currentIdx = currentIndexRef.current;
-
-    if (currentPlaylist.length === 0) return;
-    
-    let randomIndex;
-    do {
-      randomIndex = Math.floor(Math.random() * currentPlaylist.length);
-    } while (randomIndex === currentIdx && currentPlaylist.length > 1);
-
-    setCurrentIndex(randomIndex);
-    currentIndexRef.current = randomIndex;
-    playSongInternal(currentPlaylist[randomIndex]);
-  };
-
-  // Internal play song function
-  const playSongInternal = async (song) => {
-    try {
-      setIsLoading(true);
-      setCurrentSong(song);
-
-      // Unload previous sound
-      if (soundRef.current) {
-        try {
-          await soundRef.current.unloadAsync();
-        } catch (err) {
-          console.log('Unload error:', err);
-        }
-        soundRef.current = null;
-      }
-
-      // Get stream URL
-      const data = await getStreamUrl(song._id || song.id);
-
-      if (!data || !data.streamUrl) {
-        setIsLoading(false);
-        return;
-      }
-
-      // Create new sound
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: data.streamUrl },
-        { 
-          shouldPlay: true,
-          progressUpdateIntervalMillis: 100,  // ⭐ Faster updates
-        },
-        onPlaybackStatusUpdate
-      );
-
-      soundRef.current = newSound;
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Play error:', error);
-      setIsLoading(false);
-    }
-  };
-
-  // Public play song function
-  const playSong = useCallback(async (song, songList = null) => {
-    // Update playlist if provided
-    if (songList && songList.length > 0) {
-      setPlaylist(songList);
-      playlistRef.current = songList;
-      const index = songList.findIndex(s => s._id === song._id);
-      const newIndex = index >= 0 ? index : 0;
-      setCurrentIndex(newIndex);
-      currentIndexRef.current = newIndex;
-    }
-
-    await playSongInternal(song);
-  }, []);
-
-  // Public next song
   const playNextSong = useCallback(() => {
     playNextSongInternal(true);
   }, []);
 
-  // Public previous song
   const playPreviousSong = useCallback(() => {
     const currentPlaylist = playlistRef.current;
     const currentIdx = currentIndexRef.current;
@@ -233,12 +225,40 @@ export const PlayerProvider = ({ children }) => {
     playSongInternal(currentPlaylist[prevIndex]);
   }, []);
 
-  // Public random song
+  // ⭐ FIXED Random song
+  const playRandomSongInternal = () => {
+    const currentPlaylist = playlistRef.current;
+    const currentIdx = currentIndexRef.current;
+
+    if (currentPlaylist.length === 0) return;
+    
+    if (currentPlaylist.length === 1) {
+      // Only one song, replay it
+      playSongInternal(currentPlaylist[0]);
+      return;
+    }
+    
+    // Get truly random index (different from current)
+    let randomIndex;
+    let attempts = 0;
+    do {
+      randomIndex = Math.floor(Math.random() * currentPlaylist.length);
+      attempts++;
+      if (attempts > 10) break; // Safety
+    } while (randomIndex === currentIdx);
+
+    console.log(`🔀 Random: ${currentIdx} → ${randomIndex} (of ${currentPlaylist.length})`);
+    
+    setCurrentIndex(randomIndex);
+    currentIndexRef.current = randomIndex;
+    playSongInternal(currentPlaylist[randomIndex]);
+  };
+
   const playRandomSong = useCallback(() => {
     playRandomSongInternal();
   }, []);
 
-  // ⭐ FIXED Play/Pause
+  // Play/Pause
   const togglePlayPause = useCallback(async () => {
     if (!soundRef.current) return;
 
@@ -262,26 +282,17 @@ export const PlayerProvider = ({ children }) => {
   }, []);
 
   const stopSong = useCallback(async () => {
-    if (soundRef.current) {
-      try {
-        await soundRef.current.unloadAsync();
-      } catch (err) {
-        console.log('Stop error:', err);
-      }
-      soundRef.current = null;
-    }
+    await stopCurrentSound();
     setCurrentSong(null);
     setIsPlaying(false);
     setPosition(0);
     setDuration(0);
   }, []);
 
-  // ⭐ FIXED Seek
   const seekTo = useCallback(async (millis) => {
     if (soundRef.current) {
       try {
         await soundRef.current.setPositionAsync(millis);
-        // ⭐ Update position IMMEDIATELY (no wait!)
         setPosition(millis);
       } catch (error) {
         console.error('Seek error:', error);
@@ -299,7 +310,7 @@ export const PlayerProvider = ({ children }) => {
     const nextIdx = (currentIdx + 1) % modes.length;
     const newMode = modes[nextIdx];
     
-    console.log('🔄 Changed repeat mode:', repeatMode, '→', newMode);
+    console.log('🔄 Repeat mode:', repeatMode, '→', newMode);
     setRepeatMode(newMode);
     repeatModeRef.current = newMode;
   }, [repeatMode]);

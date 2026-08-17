@@ -112,7 +112,7 @@ export default function HomeScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-white dark:bg-dark justify-center items-center">
+      <SafeAreaView className="flex-1 bg-white dark:bg-dark justify-center items-center" style={{ paddingTop: 10 }}>
         <ActivityIndicator size="large" color="#e94560" />
         <Text className="text-gray-800 dark:text-white mt-4">Loading...</Text>
       </SafeAreaView>
@@ -120,7 +120,7 @@ export default function HomeScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-dark">
+    <SafeAreaView className="flex-1 bg-white dark:bg-dark" style={{ paddingTop: 10 }}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
@@ -130,7 +130,7 @@ export default function HomeScreen({ navigation }) {
             Welcome
           </Text>
           <Text className="text-gray-900 dark:text-white text-2xl font-bold mt-1">
-            🎵 My Music
+            🎵 My Music V3
           </Text>
         </View>
 

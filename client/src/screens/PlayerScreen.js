@@ -39,18 +39,16 @@ export default function PlayerScreen({ route, navigation }) {
 
   const [sliderValue, setSliderValue] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
+  const [isChanging, setIsChanging] = useState(false); // ⭐ Prevent rapid clicks
 
-  // Use currentSong from context
   const displaySong = currentSong || initialSong;
 
-  // Play song on mount
   useEffect(() => {
     if (!currentSong || currentSong._id !== initialSong._id) {
       playSong(initialSong, songList || []);
     }
   }, []);
 
-  // Update slider when position changes (only if not seeking)
   useEffect(() => {
     if (!isSeeking) {
       setSliderValue(position);
@@ -65,7 +63,6 @@ export default function PlayerScreen({ route, navigation }) {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }, []);
 
-  // Slider handlers
   const handleSliderChange = useCallback((value) => {
     setSliderValue(value);
   }, []);
@@ -77,10 +74,23 @@ export default function PlayerScreen({ route, navigation }) {
   const handleSliderComplete = useCallback(async (value) => {
     await seekTo(value);
     setSliderValue(value);
-    setTimeout(() => {
-      setIsSeeking(false);
-    }, 100);
+    setTimeout(() => setIsSeeking(false), 100);
   }, [seekTo]);
+
+  // ⭐ Debounced Next/Previous
+  const handleNext = useCallback(async () => {
+    if (isChanging) return;
+    setIsChanging(true);
+    await playNextSong();
+    setTimeout(() => setIsChanging(false), 800);
+  }, [isChanging, playNextSong]);
+
+  const handlePrevious = useCallback(async () => {
+    if (isChanging) return;
+    setIsChanging(true);
+    await playPreviousSong();
+    setTimeout(() => setIsChanging(false), 800);
+  }, [isChanging, playPreviousSong]);
 
   const repeatIcon = useMemo(() => {
     switch (repeatMode) {
@@ -138,7 +148,7 @@ export default function PlayerScreen({ route, navigation }) {
 
   return (
     <LinearGradient colors={gradientColors} className="flex-1">
-      <SafeAreaView edges={['top']} className="flex-1 px-5">
+      <SafeAreaView edges={['top']} className="flex-1 px-5" style={{ paddingTop: 10 }}>
         <StatusBar barStyle="light-content" />
 
         {/* Header */}
@@ -240,15 +250,21 @@ export default function PlayerScreen({ route, navigation }) {
           </TouchableOpacity>
 
           <TouchableOpacity 
-            onPress={playPreviousSong}
+            onPress={handlePrevious}
+            disabled={isChanging}
             activeOpacity={0.7}
           >
-            <Ionicons name="play-skip-back" size={35} color="#fff" />
+            <Ionicons 
+              name="play-skip-back" 
+              size={35} 
+              color="#fff" 
+              style={{ opacity: isChanging ? 0.5 : 1 }}
+            />
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={togglePlayPause}
-            disabled={isLoading}
+            disabled={isLoading || isChanging}
             className="w-20 h-20 rounded-full bg-white justify-center items-center"
             activeOpacity={0.8}
           >
@@ -265,10 +281,16 @@ export default function PlayerScreen({ route, navigation }) {
           </TouchableOpacity>
 
           <TouchableOpacity 
-            onPress={playNextSong}
+            onPress={handleNext}
+            disabled={isChanging}
             activeOpacity={0.7}
           >
-            <Ionicons name="play-skip-forward" size={35} color="#fff" />
+            <Ionicons 
+              name="play-skip-forward" 
+              size={35} 
+              color="#fff" 
+              style={{ opacity: isChanging ? 0.5 : 1 }}
+            />
           </TouchableOpacity>
 
           <View className="items-center">
