@@ -237,114 +237,111 @@ const upload = multer({
   },
 });
 
-// UPLOAD ENDPOINT - Mobile sends MP3 file here
 router.post('/upload', upload.single('song'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'No file uploaded',
-      });
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
 
     const filePath = req.file.path;
     const originalName = req.file.originalname;
-    console.log(`\n📤 New Upload: ${originalName}`);
-    console.log(`   Size: ${(req.file.size / 1024 / 1024).toFixed(2)} MB`);
+    
+    const { title, album, musicDirector, movieName, category } = req.body;
 
-    // Get metadata from request body (from mobile)
-    const {
-      title,
-      artist,
-      album,
-      musicDirector,
-      movieName,
-      category,
-    } = req.body;
+    // Auto-detect metadata from MP3
+    let metadata = {
+      title: '',
+      artist: 'Unknown',
+      album: '',        // ⭐ Read from MP3
+      duration: 0,
+      year: '',
+      genre: '',
+    };
 
-    // Extract additional metadata from file
-    let metadata = {};
     try {
+      const mm = require('music-metadata');
       const parsed = await mm.parseFile(filePath);
+      
       metadata = {
+        title: parsed.common.title || originalName.replace(/\.mp3$/i, ''),
+        artist: parsed.common.artist || 'Unknown',
+        album: parsed.common.album || '',  // ⭐ From MP3
         duration: Math.floor(parsed.format.duration || 0),
         year: parsed.common.year?.toString() || '',
         genre: parsed.common.genre?.[0] || '',
       };
     } catch (err) {
-      console.log('   ⚠️ Could not read metadata');
-      metadata = { duration: 0, year: '', genre: '' };
+      console.log('Metadata parse error:', err.message);
     }
 
-    // Check if already exists
+    // Clean metadata
+    const cleanText = (text) => {
+      if (!text) return text;
+      return text
+        .replace(/\s*-\s*masstamilan\.\w+/gi, '')
+        .replace(/\s*sensongsmp3\.\w+/gi, '')
+        .replace(/\s*starmusiq\.\w+/gi, '')
+        .replace(/\s*isaimini\.\w+/gi, '')
+        .replace(/\.mp3$/i, '')
+        .trim();
+    };
+
+    // Check duplicate
     const existing = await Song.findOne({
-      title: title || originalName,
-      artist: artist || 'Unknown',
+      title: cleanText(metadata.title),
+      musicDirector: musicDirector,
     });
 
     if (existing) {
-      // Clean up temp file
       fs.unlinkSync(filePath);
       return res.status(409).json({
         success: false,
         error: 'Song already exists',
-        song: existing,
       });
     }
 
     // Upload to Telegram
-    console.log(`   📤 Uploading to Telegram...`);
     const message = await bot.telegram.sendAudio(
       process.env.CHANNEL_ID,
       { source: filePath },
       {
-        title: title || originalName,
-        performer: artist || 'Unknown',
+        title: cleanText(metadata.title),
+        performer: cleanText(metadata.artist),
         duration: metadata.duration,
-        caption: `🎵 ${title || originalName}\n🎤 ${artist || 'Unknown'}`,
       }
     );
 
     // Save to MongoDB
-    console.log(`   💾 Saving to database...`);
     const song = await Song.create({
-      title: title || originalName.replace('.mp3', ''),
-      artist: artist || 'Unknown',
-      album: album || 'Unknown',
+      title: cleanText(metadata.title),
+      artist: cleanText(metadata.artist),
+      album: cleanText(metadata.album || album || musicDirector),  // ⭐ FIXED
       duration: metadata.duration,
       fileSize: req.file.size,
       originalFileName: originalName,
-      filePath: `mobile-upload/${originalName}`,
+      filePath: `mobile-upload/${musicDirector}/${originalName}`,
       telegramFileId: message.audio.file_id,
       telegramMessageId: message.message_id,
-      musicDirector: musicDirector || 'Unknown',
-      movieName: movieName || '',
+      musicDirector: musicDirector,
+      movieName: cleanText(metadata.album || movieName || ''),  // ⭐ Also use as movie
       category: category || 'song',
       year: metadata.year,
       genre: metadata.genre,
     });
 
-    // Delete temp file
     fs.unlinkSync(filePath);
-    console.log(`   ✅ Upload complete!`);
 
     res.json({
       success: true,
-      message: 'Song uploaded successfully!',
+      message: 'Uploaded successfully',
       song: song,
     });
   } catch (error) {
-    console.error('❌ Upload error:', error);
-
-    // Clean up temp file on error
+    console.error('Upload error:', error);
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

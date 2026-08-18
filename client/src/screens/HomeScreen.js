@@ -126,11 +126,8 @@ export default function HomeScreen({ navigation }) {
       {/* Header */}
       <View className="flex-row justify-between items-center px-5 pt-5 pb-3">
         <View>
-          <Text className="text-gray-600 dark:text-gray-400 text-sm">
-            Welcome
-          </Text>
           <Text className="text-gray-900 dark:text-white text-2xl font-bold mt-1">
-            🎵 My Music V3
+            🎵 Sasi Spotify
           </Text>
         </View>
 

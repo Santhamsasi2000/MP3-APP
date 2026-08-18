@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,22 +23,36 @@ export default function MoviesAlbumsScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const bottomPadding = useMiniPlayerPadding();
+  const [sortOrder, setSortOrder] = useState('az');
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
   useEffect(() => {
     fetchMovies();
   }, []);
 
   useEffect(() => {
+    let result = [...movies];
+
+    // Filter by search
     if (search) {
-      setFilteredMovies(
-        movies.filter((m) =>
-          m._id.toLowerCase().includes(search.toLowerCase())
-        )
+      result = result.filter((m) =>
+        m._id.toLowerCase().includes(search.toLowerCase())
       );
-    } else {
-      setFilteredMovies(movies);
     }
-  }, [search, movies]);
+
+    // Sort
+    result.sort((a, b) => {
+      if (sortOrder === 'az') {
+        return a._id.localeCompare(b._id);
+      } else if (sortOrder === 'za') {
+        return b._id.localeCompare(a._id);
+      } else {
+        return b.count - a.count;
+      }
+  });
+
+  setFilteredMovies(result);
+}, [search, movies, sortOrder]);
 
   const fetchMovies = async () => {
     try {
@@ -85,7 +100,16 @@ export default function MoviesAlbumsScreen({ navigation }) {
             {filteredMovies.length} albums
           </Text>
         </View>
-        <Ionicons name="disc" size={30} color="#e94560" />
+        {/* ⭐ Filter Button */}
+        <TouchableOpacity
+          onPress={() => setShowSortMenu(true)}
+          className="bg-primary/20 px-3 py-2 rounded-full flex-row items-center"
+        >
+          <Ionicons name="funnel" size={18} color="#e94560" />
+          <Text className="text-primary text-xs font-semibold ml-1">
+            {sortOrder === 'az' ? 'A-Z' : sortOrder === 'za' ? 'Z-A' : 'Count'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Search */}
@@ -161,6 +185,80 @@ export default function MoviesAlbumsScreen({ navigation }) {
           </View>
         )}
       </ScrollView>
+
+      {/* Sort Modal */}
+      <Modal
+        visible={showSortMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortMenu(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-black/60 justify-center items-center"
+          onPress={() => setShowSortMenu(false)}
+          activeOpacity={1}
+        >
+          <View className="bg-white dark:bg-card rounded-2xl p-6 w-72">
+            <Text className="text-gray-900 dark:text-white text-lg font-bold mb-4">
+              Sort By
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => { setSortOrder('az'); setShowSortMenu(false); }}
+              className={`p-4 rounded-xl mb-2 flex-row items-center ${
+                sortOrder === 'az' ? 'bg-primary' : 'bg-gray-100 dark:bg-dark'
+              }`}
+            >
+              <Ionicons 
+                name="arrow-down" 
+                size={20} 
+                color={sortOrder === 'az' ? '#fff' : '#e94560'} 
+              />
+              <Text className={`ml-3 font-semibold ${
+                sortOrder === 'az' ? 'text-white' : 'text-gray-900 dark:text-white'
+              }`}>
+                A to Z
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => { setSortOrder('za'); setShowSortMenu(false); }}
+              className={`p-4 rounded-xl mb-2 flex-row items-center ${
+                sortOrder === 'za' ? 'bg-primary' : 'bg-gray-100 dark:bg-dark'
+              }`}
+            >
+              <Ionicons 
+                name="arrow-up" 
+                size={20} 
+                color={sortOrder === 'za' ? '#fff' : '#e94560'} 
+              />
+              <Text className={`ml-3 font-semibold ${
+                sortOrder === 'za' ? 'text-white' : 'text-gray-900 dark:text-white'
+              }`}>
+                Z to A
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => { setSortOrder('count'); setShowSortMenu(false); }}
+              className={`p-4 rounded-xl flex-row items-center ${
+                sortOrder === 'count' ? 'bg-primary' : 'bg-gray-100 dark:bg-dark'
+              }`}
+            >
+              <Ionicons 
+                name="stats-chart" 
+                size={20} 
+                color={sortOrder === 'count' ? '#fff' : '#e94560'} 
+              />
+              <Text className={`ml-3 font-semibold ${
+                sortOrder === 'count' ? 'text-white' : 'text-gray-900 dark:text-white'
+              }`}>
+                Most Songs First
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }

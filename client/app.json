@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Sasi Player",
+    "name": "Sasi Spotify",
     "slug": "client",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -19,7 +19,13 @@
       "package": "com.sasikumar.mymusic",
       "adaptiveIcon": {
         "backgroundColor": "#0f0f1e"
-      }
+      },
+    "permissions": [
+        "INTERNET",
+        "WAKE_LOCK",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {},
     "extra": {

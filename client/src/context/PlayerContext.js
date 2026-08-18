@@ -28,14 +28,17 @@ export const PlayerProvider = ({ children }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [repeatMode, setRepeatMode] = useState(REPEAT_MODES.ORDER);
   
+  // ⭐ REFS FOR LATEST VALUES (Critical for callbacks!)
   const soundRef = useRef(null);
   const repeatModeRef = useRef(repeatMode);
   const playlistRef = useRef(playlist);
   const currentIndexRef = useRef(currentIndex);
-  const isChangingSongRef = useRef(false); // ⭐ Prevent double play
+  const isChangingSongRef = useRef(false);
 
+  // Keep refs updated
   useEffect(() => {
     repeatModeRef.current = repeatMode;
+    console.log('🔄 Repeat mode changed to:', repeatMode);
   }, [repeatMode]);
 
   useEffect(() => {
@@ -52,8 +55,13 @@ export const PlayerProvider = ({ children }) => {
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
-          shouldDuckAndroid: true,
+          shouldDuckAndroid: false,  // ⭐ Changed
+          playThroughEarpieceAndroid: false,
+          allowsRecordingIOS: false,
+          interruptionModeIOS: 1,  // DO_NOT_MIX
+          interruptionModeAndroid: 1,  // DO_NOT_MIX
         });
+        console.log('✅ Audio mode configured');
       } catch (error) {
         console.error('Audio setup error:', error);
       }
@@ -68,51 +76,71 @@ export const PlayerProvider = ({ children }) => {
   }, []);
 
   const onPlaybackStatusUpdate = useCallback((status) => {
-    if (status.isLoaded) {
-      setPosition(status.positionMillis || 0);
-      
-      if (status.durationMillis) {
-        setDuration(status.durationMillis);
-      }
-      
-      setIsPlaying(status.isPlaying);
+  if (!status.isLoaded) return;
 
-      if (status.didJustFinish && !isChangingSongRef.current) {
-        console.log('🎵 Song finished!');
-        handleSongFinishInternal();
-      }
-    }
-  }, []);
+  const newPosition = status.positionMillis || 0;
+  const newDuration = status.durationMillis || 0;
+  const newIsPlaying = status.isPlaying || false;
 
-  const handleSongFinishInternal = () => {
+  // Only update if changed significantly
+  setPosition(prev => 
+    Math.abs(prev - newPosition) > 100 ? newPosition : prev
+  );
+  
+  setDuration(prev => 
+    prev !== newDuration && newDuration > 0 ? newDuration : prev
+  );
+  
+  setIsPlaying(prev => 
+    prev !== newIsPlaying ? newIsPlaying : prev
+  );
+
+  if (status.didJustFinish && !isChangingSongRef.current) {
+    handleSongFinishInternal();
+  }
+  }, []); // ⭐ Empty deps - CRITICAL!
+
+  // ⭐ CRITICAL: Handle song finish based on REPEAT MODE
+  const handleSongFinishInternal = async () => {
     const currentMode = repeatModeRef.current;
-    console.log('Current mode:', currentMode);
+    
+    console.log('🎵 Song finished, mode:', currentMode);
 
-    if (currentMode === REPEAT_MODES.REPEAT_ONE) {
-      console.log('🔂 Repeat One');
+    try {
+      // Unload current sound first
       if (soundRef.current) {
-        soundRef.current.setPositionAsync(0);
-        soundRef.current.playAsync();
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
       }
-    } else if (currentMode === REPEAT_MODES.SHUFFLE) {
-      console.log('🔀 Shuffle - Playing random');
-      playRandomSongInternal();
-    } else {
-      console.log('📋 Order - Playing next');
-      playNextSongInternal(true);
+
+      // Small delay to ensure clean state
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Play next based on mode
+      if (currentMode === REPEAT_MODES.REPEAT_ONE) {
+        const currentPlaylist = playlistRef.current;
+        const currentIdx = currentIndexRef.current;
+        if (currentPlaylist[currentIdx]) {
+          await playSongInternal(currentPlaylist[currentIdx]);
+        }
+      } else if (currentMode === REPEAT_MODES.SHUFFLE) {
+        await playRandomSongInternal();
+      } else {
+        await playNextSongInternal(true);
+      }
+    } catch (error) {
+      console.error('Auto-play error:', error);
     }
   };
 
-  // ⭐ CRITICAL: Stop and unload current sound BEFORE playing new
+  // Stop current sound completely
   const stopCurrentSound = async () => {
     if (soundRef.current) {
       try {
-        // Stop first
         await soundRef.current.stopAsync();
-        // Then unload
         await soundRef.current.unloadAsync();
       } catch (err) {
-        console.log('Stop/unload error:', err);
+        console.log('Stop error:', err);
       }
       soundRef.current = null;
     }
@@ -121,9 +149,8 @@ export const PlayerProvider = ({ children }) => {
   // Internal play function
   const playSongInternal = async (song) => {
     try {
-      // ⭐ Prevent multiple simultaneous plays
       if (isChangingSongRef.current) {
-        console.log('⚠️ Already changing song, skipping');
+        console.log('⚠️ Already changing song');
         return;
       }
       
@@ -135,10 +162,8 @@ export const PlayerProvider = ({ children }) => {
       setDuration(0);
       setIsPlaying(false);
 
-      // ⭐ STOP old sound completely
       await stopCurrentSound();
 
-      // Get stream URL
       const data = await getStreamUrl(song._id || song.id);
 
       if (!data || !data.streamUrl) {
@@ -147,19 +172,26 @@ export const PlayerProvider = ({ children }) => {
         return;
       }
 
-      // Create new sound
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: data.streamUrl },
         { 
           shouldPlay: true,
           progressUpdateIntervalMillis: 100,
+          androidImplementation: 'MediaPlayer',
         },
         onPlaybackStatusUpdate
       );
 
       soundRef.current = newSound;
+      // ⭐ FORCE play after loading (important for background)
+      try {
+        await newSound.playAsync();
+        setIsPlaying(true);
+      } catch (playError) {
+        console.log('Play error:', playError);
+      }
       setIsLoading(false);
-      isChangingSongRef.current = false; // ⭐ Reset flag
+      isChangingSongRef.current = false;
       
     } catch (error) {
       console.error('Play error:', error);
@@ -182,12 +214,15 @@ export const PlayerProvider = ({ children }) => {
     await playSongInternal(song);
   }, []);
 
-  // Next song
+  // Play next song internal
   const playNextSongInternal = (loop = true) => {
     const currentPlaylist = playlistRef.current;
     const currentIdx = currentIndexRef.current;
 
-    if (currentPlaylist.length === 0) return;
+    if (currentPlaylist.length === 0) {
+      console.log('❌ No playlist!');
+      return;
+    }
 
     let nextIndex = currentIdx + 1;
     
@@ -199,52 +234,91 @@ export const PlayerProvider = ({ children }) => {
       }
     }
 
+    console.log(`📋 Next: ${currentIdx} → ${nextIndex}`);
+    
     setCurrentIndex(nextIndex);
     currentIndexRef.current = nextIndex;
     playSongInternal(currentPlaylist[nextIndex]);
   };
 
+  // Public next song - respects repeat mode
   const playNextSong = useCallback(() => {
-    playNextSongInternal(true);
-  }, []);
+  const mode = repeatModeRef.current;
+  console.log('▶️ Manual Next - Mode:', mode);
 
-  const playPreviousSong = useCallback(() => {
-    const currentPlaylist = playlistRef.current;
-    const currentIdx = currentIndexRef.current;
-
-    if (currentPlaylist.length === 0) return;
-
-    let prevIndex = currentIdx - 1;
-    
-    if (prevIndex < 0) {
-      prevIndex = currentPlaylist.length - 1;
+  if (mode === REPEAT_MODES.REPEAT_ONE) {
+    // Repeat One: Play same song again
+    console.log('🔂 Manual Next → Repeat same song');
+    if (soundRef.current) {
+      soundRef.current.setPositionAsync(0);
+      soundRef.current.playAsync();
     }
-
-    setCurrentIndex(prevIndex);
-    currentIndexRef.current = prevIndex;
-    playSongInternal(currentPlaylist[prevIndex]);
+  } else if (mode === REPEAT_MODES.SHUFFLE) {
+    // Shuffle: Play random song
+    console.log('🔀 Manual Next → Random song');
+    playRandomSongInternal();
+  } else {
+    // Order: Play next in sequence
+    console.log('📋 Manual Next → Next in order');
+    playNextSongInternal(true);
+  }
   }, []);
 
-  // ⭐ FIXED Random song
+  // Public previous song - respects repeat mode
+  const playPreviousSong = useCallback(() => {
+    const mode = repeatModeRef.current;
+    console.log('⏮ Manual Previous - Mode:', mode);
+
+    if (mode === REPEAT_MODES.REPEAT_ONE) {
+      // Repeat One: Play same song again
+      if (soundRef.current) {
+        soundRef.current.setPositionAsync(0);
+        soundRef.current.playAsync();
+      }
+    } else if (mode === REPEAT_MODES.SHUFFLE) {
+      // Shuffle: Play random song
+      playRandomSongInternal();
+    } else {
+      // Order: Play previous in sequence
+      const currentPlaylist = playlistRef.current;
+      const currentIdx = currentIndexRef.current;
+
+      if (currentPlaylist.length === 0) return;
+
+      let prevIndex = currentIdx - 1;
+      if (prevIndex < 0) {
+        prevIndex = currentPlaylist.length - 1;
+      }
+
+      setCurrentIndex(prevIndex);
+      currentIndexRef.current = prevIndex;
+      playSongInternal(currentPlaylist[prevIndex]);
+    }
+  }, []);
+
+  // ⭐ FIXED: Play random song properly
   const playRandomSongInternal = () => {
     const currentPlaylist = playlistRef.current;
     const currentIdx = currentIndexRef.current;
+
+    console.log('🎲 Random from playlist of', currentPlaylist.length);
 
     if (currentPlaylist.length === 0) return;
     
     if (currentPlaylist.length === 1) {
       // Only one song, replay it
+      console.log('Only 1 song, replaying');
       playSongInternal(currentPlaylist[0]);
       return;
     }
     
-    // Get truly random index (different from current)
+    // Get random index different from current
     let randomIndex;
     let attempts = 0;
     do {
       randomIndex = Math.floor(Math.random() * currentPlaylist.length);
       attempts++;
-      if (attempts > 10) break; // Safety
+      if (attempts > 20) break;
     } while (randomIndex === currentIdx);
 
     console.log(`🔀 Random: ${currentIdx} → ${randomIndex} (of ${currentPlaylist.length})`);
@@ -258,7 +332,7 @@ export const PlayerProvider = ({ children }) => {
     playRandomSongInternal();
   }, []);
 
-  // Play/Pause
+  // ⭐ FIXED: Play/Pause with status check
   const togglePlayPause = useCallback(async () => {
     if (!soundRef.current) return;
 
@@ -267,11 +341,11 @@ export const PlayerProvider = ({ children }) => {
       
       if (status.isLoaded) {
         if (status.isPlaying) {
-          console.log('⏸️ Pausing...');
+          console.log('⏸️ Pausing');
           await soundRef.current.pauseAsync();
           setIsPlaying(false);
         } else {
-          console.log('▶️ Playing...');
+          console.log('▶️ Playing');
           await soundRef.current.playAsync();
           setIsPlaying(true);
         }
@@ -300,17 +374,21 @@ export const PlayerProvider = ({ children }) => {
     }
   }, []);
 
+  // ⭐ CRITICAL: Cycle repeat mode properly
   const cycleRepeatMode = useCallback(() => {
     const modes = [
       REPEAT_MODES.ORDER,
       REPEAT_MODES.REPEAT_ONE,
       REPEAT_MODES.SHUFFLE,
     ];
+    
     const currentIdx = modes.indexOf(repeatMode);
     const nextIdx = (currentIdx + 1) % modes.length;
     const newMode = modes[nextIdx];
     
-    console.log('🔄 Repeat mode:', repeatMode, '→', newMode);
+    console.log('🔄 CYCLE MODE:', repeatMode, '→', newMode);
+    
+    // Update both state AND ref immediately
     setRepeatMode(newMode);
     repeatModeRef.current = newMode;
   }, [repeatMode]);

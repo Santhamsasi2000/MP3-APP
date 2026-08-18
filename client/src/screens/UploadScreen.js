@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,348 +7,487 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { uploadSong } from '../services/api';
+import { uploadSong, getDirectors } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
-import { useMiniPlayerPadding } from '../hooks/useMiniPlayerPadding';
 
 export default function UploadScreen({ navigation }) {
   const { isDark } = useTheme();
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [folderChoice, setFolderChoice] = useState(''); // 'existing' or 'new'
+  const [existingFolders, setExistingFolders] = useState([]);
+  const [selectedFolder, setSelectedFolder] = useState('');
+  const [newFolderName, setNewFolderName] = useState('');
+  const [showFolderModal, setShowFolderModal] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const bottomPadding = useMiniPlayerPadding();
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [uploadedCount, setUploadedCount] = useState(0);
 
-  const [title, setTitle] = useState('');
-  const [artist, setArtist] = useState('');
-  const [album, setAlbum] = useState('');
-  const [musicDirector, setMusicDirector] = useState('');
-  const [movieName, setMovieName] = useState('');
-  const [category, setCategory] = useState('song');
+  useEffect(() => {
+    fetchFolders();
+  }, []);
 
-  const pickFile = async () => {
+  const fetchFolders = async () => {
+    try {
+      const data = await getDirectors();
+      setExistingFolders(data);
+    } catch (error) {
+      console.error('Error fetching folders:', error);
+    }
+  };
+
+  // Pick multiple MP3 files
+  const pickFiles = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: 'audio/*',
         copyToCacheDirectory: true,
+        multiple: true, // ⭐ Multiple files
       });
 
       if (result.canceled) return;
 
-      const file = result.assets[0];
+      const files = result.assets;
 
-      if (file.size > 50 * 1024 * 1024) {
-        Alert.alert(
-          'File Too Large',
-          'Maximum file size is 50 MB. Your file is ' +
-            (file.size / 1024 / 1024).toFixed(2) +
-            ' MB'
-        );
+      // Filter valid MP3s
+      const validFiles = files.filter((file) => {
+        if (file.size > 50 * 1024 * 1024) {
+          Alert.alert('File Too Large', `${file.name} is over 50MB`);
+          return false;
+        }
+        return file.name.toLowerCase().endsWith('.mp3');
+      });
+
+      if (validFiles.length === 0) {
+        Alert.alert('No Valid Files', 'Please select MP3 files under 50MB');
         return;
       }
 
-      if (!file.name.toLowerCase().endsWith('.mp3')) {
-        Alert.alert('Invalid File', 'Please select MP3 file only');
-        return;
-      }
-
-      setSelectedFile(file);
-      const nameWithoutExt = file.name.replace('.mp3', '');
-      setTitle(nameWithoutExt);
+      setSelectedFiles(validFiles);
     } catch (error) {
-      Alert.alert('Error', 'Could not pick file: ' + error.message);
+      Alert.alert('Error', 'Could not pick files: ' + error.message);
     }
   };
 
+  // Detect category from folder name
+  const detectCategory = (folderName) => {
+    return folderName.toLowerCase().includes('bgm') ? 'bgm' : 'song';
+  };
+
+  // Handle upload
   const handleUpload = async () => {
-    if (!selectedFile) {
-      Alert.alert('No File', 'Please select an MP3 file first');
+    if (selectedFiles.length === 0) {
+      Alert.alert('No Files', 'Please select MP3 files');
       return;
     }
 
-    if (!title.trim()) {
-      Alert.alert('Missing Info', 'Please enter song title');
+    // Determine folder
+    let folderName = '';
+    if (folderChoice === 'existing') {
+      if (!selectedFolder) {
+        Alert.alert('Select Folder', 'Please choose an existing folder');
+        return;
+      }
+      folderName = selectedFolder;
+    } else if (folderChoice === 'new') {
+      if (!newFolderName.trim()) {
+        Alert.alert('Folder Name', 'Please enter a folder name');
+        return;
+      }
+      folderName = newFolderName.trim();
+    } else {
+      Alert.alert('Choose Option', 'Select existing or new folder');
       return;
     }
+
+    const category = detectCategory(folderName);
 
     setUploading(true);
-    setProgress(0);
+    setUploadProgress({ current: 0, total: selectedFiles.length });
+    setUploadedCount(0);
 
-    try {
-      const metadata = {
-        title: title.trim(),
-        artist: artist.trim() || 'Unknown',
-        album: album.trim() || 'Unknown',
-        musicDirector: musicDirector.trim() || 'Unknown',
-        movieName: movieName.trim(),
-        category: category,
-      };
+    let successCount = 0;
+    let failCount = 0;
 
-      const result = await uploadSong(
-        selectedFile.uri,
-        selectedFile.name,
-        metadata,
-        (percent) => setProgress(percent)
-      );
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      setUploadProgress({ current: i + 1, total: selectedFiles.length });
 
-      if (result.success) {
-        Alert.alert(
-          '🎉 Success!',
-          `"${result.song.title}" uploaded successfully!`,
-          [
-            { text: 'Upload Another', onPress: () => resetForm() },
-            { text: 'Go Home', onPress: () => navigation.goBack() },
-          ]
+      try {
+        // Extract title from filename (remove .mp3)
+        const title = file.name.replace(/\.mp3$/i, '');
+
+        const metadata = {
+          title: title,
+          artist: 'Unknown', // Auto-detect from metadata later
+          album: folderName,
+          musicDirector: folderName,
+          movieName: '',
+          category: category,
+        };
+
+        const result = await uploadSong(
+          file.uri,
+          file.name,
+          metadata,
+          null // No individual progress
         );
-      } else {
-        Alert.alert('Upload Failed', result.error || 'Unknown error');
+
+        if (result.success) {
+          successCount++;
+          setUploadedCount(prev => prev + 1);
+        } else {
+          failCount++;
+        }
+      } catch (error) {
+        console.error(`Upload failed for ${file.name}:`, error);
+        failCount++;
       }
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    } finally {
-      setUploading(false);
-      setProgress(0);
     }
+
+    setUploading(false);
+
+    Alert.alert(
+      '🎉 Upload Complete',
+      `✅ Uploaded: ${successCount}\n❌ Failed: ${failCount}\n📁 Folder: ${folderName}`,
+      [
+        { text: 'Upload More', onPress: () => resetForm() },
+        { text: 'Go Home', onPress: () => navigation.goBack() },
+      ]
+    );
   };
 
   const resetForm = () => {
-    setSelectedFile(null);
-    setTitle('');
-    setArtist('');
-    setAlbum('');
-    setMusicDirector('');
-    setMovieName('');
-    setCategory('song');
-    setProgress(0);
+    setSelectedFiles([]);
+    setFolderChoice('');
+    setSelectedFolder('');
+    setNewFolderName('');
+    setUploadedCount(0);
+    setUploadProgress({ current: 0, total: 0 });
+  };
+
+  const removeFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
     <SafeAreaView
       edges={['top']}
-      className="flex-1 bg-white dark:bg-dark"  style={{ paddingTop: 10 }}
+      className="flex-1 bg-white dark:bg-dark"
+      style={{ paddingTop: 10 }}
     >
+      {/* Header */}
       <View className="flex-row items-center px-5 pt-3 pb-3">
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={26} color="#e94560" />
         </TouchableOpacity>
         <Text className="text-gray-900 dark:text-white text-xl font-bold ml-4">
-          Upload Song
+          Upload Songs
         </Text>
       </View>
 
       <ScrollView
         className="flex-1 px-5"
-        contentContainerStyle={{ paddingBottom: bottomPadding }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
         {/* File Picker */}
         <TouchableOpacity
-          onPress={pickFile}
+          onPress={pickFiles}
           disabled={uploading}
           className="mt-4"
+          activeOpacity={0.8}
         >
           <LinearGradient
-            colors={selectedFile ? ['#4caf50', '#2e7d32'] : ['#e94560', '#533483']}
+            colors={selectedFiles.length > 0 ? ['#4caf50', '#2e7d32'] : ['#e94560', '#533483']}
             style={{
               borderRadius: 16,
-              padding: 30,
+              padding: 24,
               alignItems: 'center',
             }}
           >
             <Ionicons
-              name={selectedFile ? 'checkmark-circle' : 'cloud-upload'}
-              size={60}
+              name={selectedFiles.length > 0 ? 'checkmark-circle' : 'cloud-upload'}
+              size={50}
               color="#fff"
             />
-            <Text className="text-white text-lg font-bold mt-3">
-              {selectedFile ? 'File Selected!' : 'Tap to Select MP3'}
+            <Text className="text-white text-lg font-bold mt-2">
+              {selectedFiles.length > 0
+                ? `${selectedFiles.length} Files Selected`
+                : 'Tap to Select MP3 Files'}
             </Text>
-            {selectedFile && (
-              <>
-                <Text className="text-white text-sm mt-2 opacity-90">
-                  {selectedFile.name}
-                </Text>
-                <Text className="text-white text-xs mt-1 opacity-75">
-                  {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                </Text>
-              </>
-            )}
+            <Text className="text-white text-xs mt-1 opacity-80">
+              {selectedFiles.length > 0 ? 'Tap to change' : 'You can select multiple files'}
+            </Text>
           </LinearGradient>
         </TouchableOpacity>
 
-        {selectedFile && (
+        {/* Selected Files List */}
+        {selectedFiles.length > 0 && (
+          <View className="mt-4">
+            <Text className="text-gray-900 dark:text-white font-bold mb-2">
+              Selected Files ({selectedFiles.length})
+            </Text>
+            <View className="bg-gray-100 dark:bg-card rounded-xl p-3 max-h-40">
+              <ScrollView>
+                {selectedFiles.map((file, index) => (
+                  <View
+                    key={index}
+                    className="flex-row items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700"
+                  >
+                    <View className="flex-1 mr-2">
+                      <Text
+                        className="text-gray-900 dark:text-white text-sm"
+                        numberOfLines={1}
+                      >
+                        {file.name}
+                      </Text>
+                      <Text className="text-gray-500 dark:text-gray-400 text-xs">
+                        {(file.size / 1024 / 1024).toFixed(2)} MB
+                      </Text>
+                    </View>
+                    {!uploading && (
+                      <TouchableOpacity onPress={() => removeFile(index)}>
+                        <Ionicons name="close-circle" size={20} color="#e94560" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        )}
+
+        {/* Folder Choice */}
+        {selectedFiles.length > 0 && (
           <View className="mt-6">
-            <Text className="text-gray-900 dark:text-white text-lg font-bold mb-4">
-              Song Details
+            <Text className="text-gray-900 dark:text-white font-bold mb-3">
+              Choose Folder
             </Text>
 
-            {/* Title */}
-            <View className="mb-4">
-              <Text className="text-gray-500 dark:text-gray-400 text-sm mb-2">
-                Song Title *
-              </Text>
-              <TextInput
-                className="bg-gray-100 dark:bg-card text-gray-900 dark:text-white p-4 rounded-xl"
-                placeholder="Enter song title"
-                placeholderTextColor={isDark ? '#666' : '#999'}
-                value={title}
-                onChangeText={setTitle}
-                editable={!uploading}
-              />
-            </View>
-
-            {/* Artist */}
-            <View className="mb-4">
-              <Text className="text-gray-500 dark:text-gray-400 text-sm mb-2">
-                Artist / Singer
-              </Text>
-              <TextInput
-                className="bg-gray-100 dark:bg-card text-gray-900 dark:text-white p-4 rounded-xl"
-                placeholder="Artist name"
-                placeholderTextColor={isDark ? '#666' : '#999'}
-                value={artist}
-                onChangeText={setArtist}
-                editable={!uploading}
-              />
-            </View>
-
-            {/* Movie */}
-            <View className="mb-4">
-              <Text className="text-gray-500 dark:text-gray-400 text-sm mb-2">
-                Album / Movie
-              </Text>
-              <TextInput
-                className="bg-gray-100 dark:bg-card text-gray-900 dark:text-white p-4 rounded-xl"
-                placeholder="Album or movie name"
-                placeholderTextColor={isDark ? '#666' : '#999'}
-                value={movieName}
-                onChangeText={(text) => {
-                  setMovieName(text);
-                  setAlbum(text);
-                }}
-                editable={!uploading}
-              />
-            </View>
-
-            {/* Director */}
-            <View className="mb-4">
-              <Text className="text-gray-500 dark:text-gray-400 text-sm mb-2">
-                Music Director
-              </Text>
-              <TextInput
-                className="bg-gray-100 dark:bg-card text-gray-900 dark:text-white p-4 rounded-xl"
-                placeholder="Music director name"
-                placeholderTextColor={isDark ? '#666' : '#999'}
-                value={musicDirector}
-                onChangeText={setMusicDirector}
-                editable={!uploading}
-              />
-            </View>
-
-            {/* Category */}
-            <View className="mb-4">
-              <Text className="text-gray-500 dark:text-gray-400 text-sm mb-2">
-                Category
-              </Text>
-              <View className="flex-row" style={{ gap: 10 }}>
-                <TouchableOpacity
-                  onPress={() => setCategory('song')}
-                  className={`flex-1 p-4 rounded-xl border-2 ${
-                    category === 'song'
-                      ? 'bg-primary border-primary'
-                      : 'bg-gray-100 dark:bg-card border-transparent'
+            {/* Existing / New Folder Buttons */}
+            <View className="flex-row gap-2 mb-3">
+              <TouchableOpacity
+                onPress={() => setFolderChoice('existing')}
+                className={`flex-1 p-4 rounded-xl border-2 ${
+                  folderChoice === 'existing'
+                    ? 'bg-primary border-primary'
+                    : 'bg-gray-100 dark:bg-card border-transparent'
+                }`}
+                disabled={uploading}
+              >
+                <Ionicons
+                  name="folder"
+                  size={24}
+                  color={folderChoice === 'existing' ? '#fff' : '#e94560'}
+                  style={{ alignSelf: 'center' }}
+                />
+                <Text
+                  className={`text-center font-semibold mt-2 ${
+                    folderChoice === 'existing'
+                      ? 'text-white'
+                      : 'text-gray-900 dark:text-white'
                   }`}
-                  disabled={uploading}
                 >
-                  <Text 
-                    className={
-                      category === 'song'
-                        ? 'text-white text-center font-semibold'
-                        : 'text-gray-900 dark:text-white text-center font-semibold'
-                    }
-                  >
-                    🎵 Song
-                  </Text>
-                </TouchableOpacity>
+                  Existing Folder
+                </Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => setCategory('bgm')}
-                  className={`flex-1 p-4 rounded-xl border-2 ${
-                    category === 'bgm'
-                      ? 'bg-primary border-primary'
-                      : 'bg-gray-100 dark:bg-card border-transparent'
+              <TouchableOpacity
+                onPress={() => setFolderChoice('new')}
+                className={`flex-1 p-4 rounded-xl border-2 ${
+                  folderChoice === 'new'
+                    ? 'bg-primary border-primary'
+                    : 'bg-gray-100 dark:bg-card border-transparent'
+                }`}
+                disabled={uploading}
+              >
+                <Ionicons
+                  name="add-circle"
+                  size={24}
+                  color={folderChoice === 'new' ? '#fff' : '#e94560'}
+                  style={{ alignSelf: 'center' }}
+                />
+                <Text
+                  className={`text-center font-semibold mt-2 ${
+                    folderChoice === 'new'
+                      ? 'text-white'
+                      : 'text-gray-900 dark:text-white'
                   }`}
-                  disabled={uploading}
                 >
-                  <Text 
-                    className={
-                      category === 'bgm'
-                        ? 'text-white text-center font-semibold'
-                        : 'text-gray-900 dark:text-white text-center font-semibold'
-                    }
-                  >
-                    🎼 BGM
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  New Folder
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Progress */}
-            {uploading && (
-              <View className="mb-4">
-                <View className="flex-row justify-between mb-2">
-                  <Text className="text-gray-900 dark:text-white text-sm">
-                    Uploading...
+            {/* Existing Folder Selector */}
+            {folderChoice === 'existing' && (
+              <TouchableOpacity
+                onPress={() => setShowFolderModal(true)}
+                disabled={uploading}
+                className="bg-gray-100 dark:bg-card p-4 rounded-xl flex-row items-center justify-between"
+              >
+                <View className="flex-1">
+                  <Text className="text-gray-500 dark:text-gray-400 text-xs">
+                    Selected Folder
                   </Text>
-                  <Text className="text-primary font-bold">{progress}%</Text>
+                  <Text className="text-gray-900 dark:text-white font-semibold mt-1">
+                    {selectedFolder || 'Tap to select...'}
+                  </Text>
                 </View>
-                <View className="h-3 bg-gray-200 dark:bg-card rounded-full overflow-hidden">
-                  <View
-                    className="h-full bg-primary rounded-full"
-                    style={{ width: `${progress}%` }}
-                  />
-                </View>
+                <Ionicons name="chevron-forward" size={20} color="#e94560" />
+              </TouchableOpacity>
+            )}
+
+            {/* New Folder Name Input */}
+            {folderChoice === 'new' && (
+              <View>
+                <TextInput
+                  className="bg-gray-100 dark:bg-card text-gray-900 dark:text-white p-4 rounded-xl"
+                  placeholder="Enter folder name (e.g., A. R. Rahman BGM)"
+                  placeholderTextColor={isDark ? '#666' : '#999'}
+                  value={newFolderName}
+                  onChangeText={setNewFolderName}
+                  editable={!uploading}
+                />
+                <Text className="text-gray-500 dark:text-gray-400 text-xs mt-2">
+                  💡 Add "BGM" in name for BGM folder
+                </Text>
               </View>
             )}
 
-            {/* Upload Button */}
-            <TouchableOpacity
-              onPress={handleUpload}
-              disabled={uploading}
-              className="mt-4"
-            >
-              <LinearGradient
-                colors={uploading ? ['#666', '#444'] : ['#e94560', '#533483']}
-                style={{
-                  padding: 16,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                }}
-              >
-                {uploading ? (
-                  <View className="flex-row items-center">
-                    <ActivityIndicator color="#fff" />
-                    <Text className="text-white font-bold ml-2">
-                      Uploading to Cloud...
-                    </Text>
-                  </View>
-                ) : (
-                  <View className="flex-row items-center">
-                    <Ionicons name="cloud-upload" size={20} color="#fff" />
-                    <Text className="text-white font-bold ml-2 text-lg">
-                      Upload Song
-                    </Text>
-                  </View>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+            {/* Auto-detected Category */}
+            {(selectedFolder || newFolderName) && (
+              <View className="bg-primary/10 rounded-xl p-3 mt-3 flex-row items-center">
+                <Ionicons
+                  name={detectCategory(selectedFolder || newFolderName) === 'bgm' ? 'musical-note' : 'musical-notes'}
+                  size={20}
+                  color="#e94560"
+                />
+                <Text className="text-primary font-semibold ml-2">
+                  Auto-detected: {detectCategory(selectedFolder || newFolderName).toUpperCase()}
+                </Text>
+              </View>
+            )}
           </View>
         )}
+
+        {/* Upload Progress */}
+        {uploading && (
+          <View className="mt-6 bg-gray-100 dark:bg-card p-4 rounded-xl">
+            <Text className="text-gray-900 dark:text-white font-bold text-center mb-2">
+              Uploading... {uploadedCount}/{uploadProgress.total}
+            </Text>
+            <View className="h-3 bg-gray-200 dark:bg-dark rounded-full overflow-hidden">
+              <View
+                className="h-full bg-primary"
+                style={{
+                  width: `${(uploadedCount / uploadProgress.total) * 100}%`,
+                }}
+              />
+            </View>
+            <Text className="text-gray-500 dark:text-gray-400 text-xs text-center mt-2">
+              Please wait...
+            </Text>
+          </View>
+        )}
+
+        {/* Upload Button */}
+        {selectedFiles.length > 0 && !uploading && (
+          <TouchableOpacity
+            onPress={handleUpload}
+            className="mt-6"
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={['#e94560', '#533483']}
+              style={{
+                padding: 16,
+                borderRadius: 12,
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="cloud-upload" size={22} color="#fff" />
+              <Text className="text-white font-bold ml-2 text-lg">
+                Upload {selectedFiles.length} Song{selectedFiles.length > 1 ? 's' : ''}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
       </ScrollView>
+
+      {/* Folder Selection Modal */}
+      <Modal
+        visible={showFolderModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFolderModal(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-black/60 justify-end"
+          onPress={() => setShowFolderModal(false)}
+          activeOpacity={1}
+        >
+          <View className="bg-white dark:bg-dark rounded-t-3xl p-6 max-h-96">
+            <View className="items-center mb-4">
+              <View className="w-12 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+            </View>
+
+            <Text className="text-gray-900 dark:text-white text-xl font-bold mb-4">
+              Select Folder ({existingFolders.length})
+            </Text>
+
+            <ScrollView>
+              {existingFolders.map((folder, index) => (
+                <TouchableOpacity
+                  key={index}
+                  onPress={() => {
+                    setSelectedFolder(folder._id);
+                    setShowFolderModal(false);
+                  }}
+                  className={`p-4 rounded-xl mb-2 flex-row items-center justify-between ${
+                    selectedFolder === folder._id
+                      ? 'bg-primary'
+                      : 'bg-gray-100 dark:bg-card'
+                  }`}
+                >
+                  <View className="flex-1">
+                    <Text
+                      className={`font-semibold ${
+                        selectedFolder === folder._id
+                          ? 'text-white'
+                          : 'text-gray-900 dark:text-white'
+                      }`}
+                      numberOfLines={1}
+                    >
+                      {folder._id}
+                    </Text>
+                    <Text
+                      className={`text-xs mt-1 ${
+                        selectedFolder === folder._id
+                          ? 'text-white opacity-80'
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}
+                    >
+                      {folder.count} songs
+                    </Text>
+                  </View>
+                  {selectedFolder === folder._id && (
+                    <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }

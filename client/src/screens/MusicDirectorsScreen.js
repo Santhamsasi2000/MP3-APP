@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +21,9 @@ export default function MusicDirectorsScreen({ navigation }) {
   const [directors, setDirectors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('songs'); // 'songs' or 'bgm'
+  const [activeTab, setActiveTab] = useState('songs');
+  const [sortOrder, setSortOrder] = useState('az');
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
   useEffect(() => {
     fetchDirectors();
@@ -44,7 +47,8 @@ export default function MusicDirectorsScreen({ navigation }) {
   };
 
   // Filter directors based on active tab
-  const filteredDirectors = directors.filter((director) => {
+  const filteredDirectors = directors
+  .filter((director) => {
     const name = director._id.toLowerCase();
     if (activeTab === 'bgm') {
       // Show only BGM folders
@@ -52,6 +56,16 @@ export default function MusicDirectorsScreen({ navigation }) {
     } else {
       // Show only Songs folders (not BGM)
       return !name.includes('bgm');
+    }
+  })
+  .sort((a,b) => {
+    if (sortOrder === 'az') {
+      return a._id.localeCompare(b._id);
+    } else if (sortOrder === 'za') {
+      return b._id.localeCompare(a._id);
+    } else {
+      // Default: by song count (highest first)
+      return b.count - a.count;
     }
   });
 
@@ -85,18 +99,27 @@ export default function MusicDirectorsScreen({ navigation }) {
     >
       {/* Header */}
       <View className="flex-row items-center px-5 pt-3 pb-3">
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={26} color="#e94560" />
-        </TouchableOpacity>
-        <View className="ml-4 flex-1">
-          <Text className="text-gray-900 dark:text-white text-2xl font-bold">
-            Music Directors
-          </Text>
-          <Text className="text-gray-500 dark:text-gray-400 text-sm">
-            {filteredDirectors.length} directors
-          </Text>
-        </View>
-        <Ionicons name="musical-notes" size={30} color="#e94560" />
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={26} color="#e94560" />
+          </TouchableOpacity>
+          <View className="ml-4 flex-1">
+            <Text className="text-gray-900 dark:text-white text-2xl font-bold">
+              Music Directors
+            </Text>
+            <Text className="text-gray-500 dark:text-gray-400 text-sm">
+              {filteredDirectors.length} directors
+            </Text>
+          </View>
+          {/* ⭐ FILTER BUTTON - Replaces icon */}
+          <TouchableOpacity
+            onPress={() => setShowSortMenu(true)}
+            className="bg-primary/20 px-3 py-2 rounded-full flex-row items-center"
+          >
+            <Ionicons name="funnel" size={18} color="#e94560" />
+            <Text className="text-primary text-xs font-semibold ml-1">
+              {sortOrder === 'az' ? 'A-Z' : sortOrder === 'za' ? 'Z-A' : 'Count'}
+            </Text>
+          </TouchableOpacity>
       </View>
 
       {/* Tabs */}
@@ -244,6 +267,89 @@ export default function MusicDirectorsScreen({ navigation }) {
           </View>
         )}
       </ScrollView>
+
+      {/* Sort Menu Modal */}
+      <Modal
+        visible={showSortMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortMenu(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-black/60 justify-center items-center"
+          onPress={() => setShowSortMenu(false)}
+          activeOpacity={1}
+        >
+          <View className="bg-white dark:bg-card rounded-2xl p-6 w-72">
+            <Text className="text-gray-900 dark:text-white text-lg font-bold mb-4">
+              Sort By
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => {
+                setSortOrder('count');
+                setShowSortMenu(false);
+              }}
+              className={`p-4 rounded-xl mb-2 flex-row items-center ${
+                sortOrder === 'count' ? 'bg-primary' : 'bg-gray-100 dark:bg-dark'
+              }`}
+            >
+              <Ionicons 
+                name="stats-chart" 
+                size={20} 
+                color={sortOrder === 'count' ? '#fff' : '#e94560'} 
+              />
+              <Text className={`ml-3 font-semibold ${
+                sortOrder === 'count' ? 'text-white' : 'text-gray-900 dark:text-white'
+              }`}>
+                Most Songs First
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                setSortOrder('az');
+                setShowSortMenu(false);
+              }}
+              className={`p-4 rounded-xl mb-2 flex-row items-center ${
+                sortOrder === 'az' ? 'bg-primary' : 'bg-gray-100 dark:bg-dark'
+              }`}
+            >
+              <Ionicons 
+                name="arrow-down" 
+                size={20} 
+                color={sortOrder === 'az' ? '#fff' : '#e94560'} 
+              />
+              <Text className={`ml-3 font-semibold ${
+                sortOrder === 'az' ? 'text-white' : 'text-gray-900 dark:text-white'
+              }`}>
+                A to Z
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                setSortOrder('za');
+                setShowSortMenu(false);
+              }}
+              className={`p-4 rounded-xl flex-row items-center ${
+                sortOrder === 'za' ? 'bg-primary' : 'bg-gray-100 dark:bg-dark'
+              }`}
+            >
+              <Ionicons 
+                name="arrow-up" 
+                size={20} 
+                color={sortOrder === 'za' ? '#fff' : '#e94560'} 
+              />
+              <Text className={`ml-3 font-semibold ${
+                sortOrder === 'za' ? 'text-white' : 'text-gray-900 dark:text-white'
+              }`}>
+                Z to A
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
